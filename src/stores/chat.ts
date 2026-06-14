@@ -1,0 +1,301 @@
+import { defineStore } from 'pinia'
+import { ref } from 'vue'
+import { getChatHistory } from '@/api/chat'
+import type { ChatMessage, MomentMedia, WsMessage } from '@/types'
+
+const HEART_MARKER = '__TML_HEART__'
+const HISTORY_PAGE_SIZE = 30
+
+export type WsEventCallback = (msg: WsMessage) => void
+
+export const useChatStore = defineStore('chat', () => {
+  const messages = ref<WsMessage[]>([])
+  const partnerOnline = ref(false)
+  const lastEventTime = ref(0)
+  const lastEventType = ref('')
+  const isConnected = ref(false)
+  /** Timestamp (ms) of the most recent successful WS open. Consumers
+   *  use this to suppress "上线" toasts in the first few seconds after a
+   *  fresh login (where the existing online status is replayed, not new). */
+  const connectedAt = ref(0)
+  const loadingHistory = ref(false)
+  const historyCursor = ref<string | null>(null)
+  const historyHasMore = ref(true)
+  const historyLoaded = ref(false)
+  const historyError = ref('')
+  /** Unread chat messages — incremented on every incoming partner chat
+   *  unless the user is currently on the chat page. Cleared by
+   *  markChatRead() (called on chat-page enter). */
+  const chatUnread = ref(0)
+
+  let ws: WebSocket | null = null
+  let myUsername = ''
+  let myDisplayName = ''
+  let shouldReconnect = true
+  const eventListeners: WsEventCallback[] = []
+  let loginGraceTimer: ReturnType<typeof setTimeout> | null = null
+
+  function onEvent(cb: WsEventCallback) {
+    eventListeners.push(cb)
+    return () => {
+      const idx = eventListeners.indexOf(cb)
+      if (idx > -1) eventListeners.splice(idx, 1)
+    }
+  }
+
+  function emitEvent(msg: WsMessage) {
+    eventListeners.forEach((cb) => cb(msg))
+  }
+
+  function isSelf(sender: string): boolean {
+    const s = (sender || '').toLowerCase()
+    if (s === myUsername.toLowerCase()) return true
+    if (myDisplayName && s === myDisplayName.toLowerCase()) return true
+    return false
+  }
+
+  function connect(username: string, displayName?: string) {
+    if (ws) {
+      // Update display name even on no-op connect (AppHeader connects first
+      // with username only, ChatView later refreshes with the display name).
+      if (displayName) myDisplayName = displayName
+      return
+    }
+    shouldReconnect = true
+    myUsername = username
+    if (displayName) myDisplayName = displayName
+    window.addEventListener('beforeunload', onBeforeUnload)
+    if (partnerOnline.value) startLoginGrace()
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
+    ws = new WebSocket(`${proto}//localhost:8081/ws/chat?username=${username}`)
+
+    ws.onopen = () => {
+      console.log('%c[WS] %c已连接', 'color: #10b981; font-weight: bold;', 'color: #5C4A52;')
+      isConnected.value = true
+      connectedAt.value = Date.now()
+    }
+
+    ws.onmessage = (e) => {
+      if (loginGraceTimer) { clearTimeout(loginGraceTimer); loginGraceTimer = null }
+      const msg: WsMessage = JSON.parse(e.data)
+      console.log(
+        `%c[WS] %c${msg.type} %c来自 ${msg.sender}`,
+        'color: #8b5cf6; font-weight: bold;',
+        'color: #FF7EB6;',
+        'color: #5C4A52;',
+        msg,
+      )
+
+      // Heart signal: preferred future protocol is { type: 'heart' }.
+      // Current backend treats outgoing WS text as chat, so we also accept
+      // a private marker payload carried in a chat frame. We do NOT append
+      // it to the chat message list; it just fires an event so ChatView can
+      // burst hearts on the receiver's screen.
+      if (msg.type === 'heart' || (msg.type === 'chat' && msg.content === HEART_MARKER)) {
+        if (!isSelf(msg.sender)) {
+          lastEventTime.value = Date.now()
+          lastEventType.value = 'heart'
+          emitEvent({ ...msg, type: 'heart', content: 'heart' })
+        }
+        return
+      }
+
+      // Server-sent chat history can arrive as a WS history frame. Accept
+      // data.messages / data.list as ChatMessage[] and prepend older items.
+      if (msg.type === 'history') {
+        const list = (msg.data?.messages || msg.data?.list) as ChatMessage[] | undefined
+        if (Array.isArray(list)) prependHistory(list)
+        lastEventTime.value = Date.now()
+        lastEventType.value = 'history'
+        emitEvent(msg)
+        return
+      }
+
+      // Drop server-echo of chat messages we authored ourselves — UI has
+      // already optimistically rendered the bubble in send(). Without this
+      // guard, every user message would briefly double up the moment the
+      // server bounces it back to its origin connection.
+      if (msg.type === 'chat' && isSelf(msg.sender)) return
+
+      // Track partner presence — used by AppHeader's status dot only.
+      if (msg.type === 'online' && !isSelf(msg.sender)) partnerOnline.value = true
+      if (msg.type === 'offline' && !isSelf(msg.sender)) partnerOnline.value = false
+      if (msg.type === 'status') {
+        const list: string[] | undefined = msg.data?.online as string[] | undefined
+        if (list) partnerOnline.value = list.some(u => u.toLowerCase() !== myUsername.toLowerCase())
+      }
+
+      messages.value.push(msg)
+      lastEventTime.value = Date.now()
+      lastEventType.value = msg.type
+      // Bump unread for partner chats; useGlobalEvents resets it when
+      // entering /chat, so any chat the user actually sees doesn't count.
+      if (msg.type === 'chat' && !isSelf(msg.sender)) chatUnread.value++
+      emitEvent(msg)
+    }
+
+    ws.onclose = () => {
+      console.log('%c[WS] %c断开连接，3秒后重连', 'color: #f59e0b; font-weight: bold;', 'color: #5C4A52;')
+      isConnected.value = false
+      ws = null
+      setTimeout(() => {
+        if (!ws && shouldReconnect) connect(username)
+      }, 3000)
+    }
+
+    ws.onerror = (err) => {
+      console.error('%c[WS] %c错误', 'color: #f43f5e; font-weight: bold;', 'color: #5C4A52;', err)
+    }
+  }
+
+  function disconnect() {
+    shouldReconnect = false
+    window.removeEventListener('beforeunload', onBeforeUnload)
+    if (loginGraceTimer) { clearTimeout(loginGraceTimer); loginGraceTimer = null }
+    ws?.close()
+    ws = null
+    isConnected.value = false
+    connectedAt.value = 0
+  }
+
+  function prependHistory(list: ChatMessage[]) {
+    const existingIds = new Set(
+      messages.value
+        .map(m => m.data?.id)
+        .filter((id): id is number => typeof id === 'number'),
+    )
+    const existingKey = new Set(messages.value.map(m => `${m.sender}|${m.time}|${m.content}`))
+    const mapped = [...list]
+      // Backend returns DESC; display needs ASC.
+      .sort((a, b) => new Date(a.createTime).getTime() - new Date(b.createTime).getTime() || a.id - b.id)
+      .map<WsMessage>((m) => ({
+        sender: m.senderName,
+        content: m.content,
+        time: m.createTime.slice(11, 19),
+        type: 'chat',
+        data: { id: m.id, senderId: m.senderId, receiverId: m.receiverId, createTime: m.createTime, mediaList: m.mediaList || [] },
+      }))
+      .filter(m => {
+        const id = m.data?.id
+        if (typeof id === 'number' && existingIds.has(id)) return false
+        return !existingKey.has(`${m.sender}|${m.time}|${m.content}`)
+      })
+    messages.value.unshift(...mapped)
+  }
+
+  async function loadHistory(reset = false) {
+    if (loadingHistory.value) return
+    if (!reset && !historyHasMore.value) return
+    loadingHistory.value = true
+    historyError.value = ''
+    try {
+      if (reset) {
+        historyCursor.value = null
+        historyHasMore.value = true
+        historyLoaded.value = false
+        messages.value = messages.value.filter(m => !m.data?.id) // keep optimistic live messages only
+      }
+      const res = await getChatHistory({ cursor: historyCursor.value, size: HISTORY_PAGE_SIZE })
+      prependHistory(res.data.list)
+      historyCursor.value = res.data.nextCursor
+      historyHasMore.value = res.data.hasMore
+      historyLoaded.value = true
+    } catch (err: any) {
+      const msg = err?.msg || err?.message || '聊天记录加载失败'
+      historyError.value = msg
+      console.warn('[chat] loadHistory failed', err)
+      throw err
+    } finally {
+      loadingHistory.value = false
+    }
+  }
+
+  function send(text: string, mediaList: MomentMedia[] = []) {
+    console.log(
+      `%c[WS] %c发送 %c${text}`,
+      'color: #3b82f6; font-weight: bold;',
+      'color: #FF7EB6;',
+      'color: #5C4A52;',
+      mediaList,
+    )
+    const now = new Date()
+    const hh = String(now.getHours()).padStart(2, '0')
+    const mm = String(now.getMinutes()).padStart(2, '0')
+    const ss = String(now.getSeconds()).padStart(2, '0')
+    const localMsg: WsMessage = {
+      sender: myDisplayName || myUsername,
+      content: text,
+      time: `${hh}:${mm}:${ss}`,
+      type: 'chat',
+      data: { mediaList },
+    }
+    messages.value.push(localMsg)
+    lastEventTime.value = Date.now()
+    lastEventType.value = 'chat'
+
+    ws?.send(JSON.stringify({ type: 'chat', content: text, mediaList }))
+  }
+
+  /**
+   * Send a visible heart to the partner.
+   *
+   * Temporary compatibility path: until backend supports a real `heart`
+   * WS type, we send a private marker string through the existing text
+   * channel. Our client recognizes that marker and renders hearts instead
+   * of showing it as chat text. Backend prompt below asks to formalize this
+   * as a `type: "heart"` frame so it never enters persisted chat history.
+   */
+  function sendHeart() {
+    const now = new Date()
+    const hh = String(now.getHours()).padStart(2, '0')
+    const mm = String(now.getMinutes()).padStart(2, '0')
+    const ss = String(now.getSeconds()).padStart(2, '0')
+    lastEventTime.value = Date.now()
+    lastEventType.value = 'heart'
+    emitEvent({
+      sender: myDisplayName || myUsername,
+      content: 'heart',
+      time: `${hh}:${mm}:${ss}`,
+      type: 'heart',
+    })
+    ws?.send(JSON.stringify({ type: 'heart' }))
+  }
+
+  function onBeforeUnload() { ws?.close() }
+
+  function startLoginGrace() {
+    // If login said partnerOnline=true but no `status` confirmation arrives
+    // within 10s, our optimistic flag is wrong — reset to offline.
+    loginGraceTimer = setTimeout(() => {
+      if (partnerOnline.value && !isConnected.value) {
+        console.log('%c[WS] %clogin grace expired, reset online', 'color: #f59e0b; font-weight: bold;', 'color: #5C4A52;')
+        partnerOnline.value = false
+      }
+    }, 10000)
+  }
+
+  function markChatRead() {
+    chatUnread.value = 0
+  }
+
+  return {
+    messages,
+    partnerOnline,
+    lastEventTime,
+    lastEventType,
+    isConnected,
+    connectedAt,
+    loadingHistory,
+    historyHasMore,
+    historyLoaded,
+    historyError,
+    chatUnread,
+    connect,
+    disconnect,
+    loadHistory,
+    send,
+    sendHeart,
+    markChatRead,
+    onEvent,
+  }
+})

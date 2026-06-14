@@ -1,0 +1,295 @@
+/* ===== Element Plus Theme Override (cherry blossom pink) ===== */
+:root {
+  --el-color-primary: #FF7EB6;
+  --el-color-primary-light-3: #FFA8D4;
+  --el-color-primary-light-5: #FFC4E3;
+  --el-color-primary-light-7: #FFD6EC;
+  --el-color-primary-light-8: #FFE4F2;
+  --el-color-primary-light-9: #FFF0F7;
+  --el-color-primary-dark-2: #E8659F;
+  --el-color-success: #10b981;
+  --el-color-warning: #f59e0b;
+  --el-color-danger: #f43f5e;
+  --el-color-error: #f43f5e;
+  --el-color-info: #8b5cf6;
+  --el-border-radius-base: 12px;
+  --el-border-radius-small: 8px;
+  --el-border-radius-round: 20px;
+  --el-bg-color-overlay: #FFF8FB;
+
+  /* === Project tokens === */
+  --pink-50:  #FFF8FB;
+  --pink-100: #FFF0F7;
+  --pink-200: #FFE4F2;
+  --pink-300: #FFD6EC;
+  --pink-400: #FFC4E3;
+  --pink-500: #FFA8D4;
+  --pink-600: #FF7EB6;
+  --pink-700: #E8659F;
+  --pink-800: #D1558C;
+  --rose-heart: #FF4D6D;
+  --ink-warm: #5C4A52;
+  --ink-soft: #7A6876;
+  --ink-mute: #C9A8B8;
+  --ink-faint: #D4C5CD;
+
+  --font-serif: "Noto Serif SC", "Songti SC", "STSong", Georgia, "Times New Roman", serif;
+  --font-script: "Caveat", "Dancing Script", "Brush Script MT", cursive;
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+
+  /* === Responsive layout tokens === */
+  /* Single breakpoint at 960px: ≤960 = "small screen" (phone + tablet,
+   * bottom tab bar, compact spacing); >960 = desktop (top nav, roomy). */
+  --bp-small: 960px;
+
+  /* Page-level padding. Pages should write
+   *   padding: var(--space-page-y) var(--space-page-x);
+   * and `padding-bottom: calc(var(--space-page-y) + var(--tab-bar-height))`
+   * so the bottom tab bar on small screens never covers content. */
+  --space-page-x: 24px;
+  --space-page-y: 56px;
+  --tab-bar-height: 0px;
+  /* iOS safe-area inset (notch / home indicator). Resolves to 0 on devices
+   * without a notch. Used inside the tab bar component. */
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ===== Small-screen overrides (phone + tablet) ===== */
+@media (max-width: 960px) {
+  :root {
+    --space-page-x: 16px;
+    --space-page-y: 24px;
+    /* 56px tab bar + iOS safe area */
+    --tab-bar-height: calc(56px + var(--safe-bottom));
+  }
+}
+
+/* ===== ElMessage ===== */
+.el-message {
+  border-radius: 10px !important;
+  border: 1px solid #FFD6EC !important;
+  background: #FFF8FB !important;
+}
+.el-message--success { border-color: #FFC4E3 !important; }
+
+/* ===== ElNotification ===== */
+.el-notification {
+  border-left: 4px solid #FF7EB6 !important;
+  background: #FFF8FB !important;
+  border-radius: 12px !important;
+}
+
+/* ===== ElMessageBox ===== */
+.pink-message-box { border-radius: 16px !important; }
+.pink-message-box .el-message-box__header { padding-top: 28px; }
+.pink-message-box .el-message-box__title { color: #5C4A52 !important; font-weight: 600; }
+.pink-message-box .el-message-box__message { color: #7A6876 !important; }
+.pink-message-box .el-button--primary {
+  background: linear-gradient(135deg, #FF7EB6, #FF4D6D) !important;
+  border: none !important;
+}
+
+/* ===== ElDialog ===== */
+.el-dialog { border-radius: 16px !important; --el-dialog-bg-color: #FFF8FB; }
+.el-dialog__header { border-bottom: 1px solid #FFD6EC; }
+
+/* ===== ElTabs ===== */
+.el-tabs__nav-wrap::after { background: #FFD6EC !important; }
+.el-tabs__item.is-active { color: #FF7EB6 !important; }
+.el-tabs__active-bar { background: #FF7EB6 !important; }
+
+/* ===== ElButton ===== */
+.el-button--primary {
+  --el-button-bg-color: #FF7EB6;
+  --el-button-border-color: #FF7EB6;
+  --el-button-hover-bg-color: #E8659F;
+  --el-button-hover-border-color: #E8659F;
+  --el-button-active-bg-color: #D1558C;
+  --el-button-active-border-color: #D1558C;
+}
+
+/* ===== ElInput ===== */
+.el-input__wrapper { box-shadow: 0 0 0 1px #FFD6EC; }
+.el-input__wrapper:hover { box-shadow: 0 0 0 1px #FFC4E3; }
+.el-input__wrapper.is-focus { box-shadow: 0 0 0 1px #FF7EB6; }
+
+/* ===== v-loading spinner ===== */
+.el-loading-spinner .circular .path { stroke: #FF7EB6 !important; }
+.el-loading-spinner .el-loading-text { color: #E8659F !important; }
+.el-loading-mask { background-color: rgba(255, 248, 251, 0.85) !important; }
+
+/* ===== ElTag / ElSelect / ElCheckbox ===== */
+.el-tag--primary {
+  --el-tag-bg-color: #FFE4F2;
+  --el-tag-border-color: #FFC4E3;
+  --el-tag-text-color: #E8659F;
+}
+.el-select-dropdown__item.is-selected { color: #FF7EB6 !important; }
+.el-select-dropdown__item:hover { background: #FFE4F2 !important; }
+.el-checkbox__input.is-checked .el-checkbox__inner { background: #FF7EB6 !important; border-color: #FF7EB6 !important; }
+.el-radio__input.is-checked .el-radio__inner { background: #FF7EB6 !important; border-color: #FF7EB6 !important; }
+.el-switch.is-checked .el-switch__core { background: #FF7EB6 !important; border-color: #FF7EB6 !important; }
+.el-pagination .el-pager li.is-active { background: #FF7EB6 !important; }
+
+/* ===== App Global ===== */
+* { box-sizing: border-box; }
+
+/*
+ * Cursor / selection policy: by default *every* surface in the app is
+ * non-selectable (no I-beam on hover, no long-press selection sheet on
+ * touch). Anything that genuinely should be readable as selectable text
+ * — letters, diary bodies, message contents, code, inputs — opts back in
+ * with `.selectable` or by being a native form control.
+ *
+ * This rules out the most common "label looks like a clickable thing
+ * but pops a text caret" annoyance, especially on phones.
+ */
+html {
+  -webkit-user-select: none;
+  user-select: none;
+  /* The page-level scrollbar is owned by .route-frame, not the document.
+   * Locking html/body to overflow:hidden prevents the scrollbar from
+   * appearing-then-disappearing during route changes. */
+  height: 100%;
+  overflow: hidden;
+}
+input, textarea, [contenteditable="true"], .selectable, .selectable * {
+  -webkit-user-select: text; user-select: text;
+  cursor: auto;
+}
+/*
+ * Content surfaces that the user might want to copy (read aloud, paste
+ * elsewhere). Listed here once globally so each view doesn't have to
+ * sprinkle a class manually.
+ */
+.letter-body,
+.entry-body,
+.moment-content,
+.bubble-text,
+.sent-content,
+.letter-content,
+.recent-quote,
+.full-letter-body,
+.event-body-text,
+.event-title {
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: text;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  background: #FFF8FB;
+  color: #5C4A52;
+  -webkit-font-smoothing: antialiased;
+  /* Prevent iOS Safari from auto-zooming when an input gets focus.
+   * Default zoom triggers on inputs whose font-size is < 16px. */
+  -webkit-text-size-adjust: 100%;
+  /* Suppress the gray tap highlight on phones — the per-button :active
+   * styles already give visual feedback. */
+  -webkit-tap-highlight-color: transparent;
+  /* Pair with html { overflow:hidden }: page-level scroll lives inside
+   * .route-frame so route changes can't spawn a transient body scrollbar. */
+  height: 100%;
+  overflow: hidden;
+}
+
+#app {
+  /* Old rule was min-height: 100vh; switch to a fixed-height column so
+   * AppHeader + .route-frame + MobileTabBar can lay out correctly when
+   * the body itself can't scroll. */
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* iOS Safari: any input/textarea < 16px also triggers zoom-on-focus.
+ * Floor everything at 16px on small screens so the page never jumps. */
+@media (max-width: 960px) {
+  input, textarea, select, .el-input__inner, .el-textarea__inner {
+    font-size: 16px !important;
+  }
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #FFC4E3; border-radius: 3px; }
+/* Hide scrollbar on phones — system handles overlay scroll */
+@media (max-width: 960px) {
+  ::-webkit-scrollbar { display: none; }
+}
+
+/* ===== Shared keyframes ===== */
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes heart-pop {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.45); }
+  100% { transform: scale(1); }
+}
+@keyframes envelope-open {
+  0%   { transform: rotateX(0deg); }
+  100% { transform: rotateX(-180deg); }
+}
+@keyframes burst-up {
+  0%   { transform: translate(0, 0) scale(0.4); opacity: 0; }
+  20%  { opacity: 1; }
+  100% { transform: translate(var(--bx, 0), var(--by, -120px)) scale(1); opacity: 0; }
+}
+@keyframes paper-fly {
+  0%   { transform: translate(0,0) rotate(0); opacity: 1; }
+  100% { transform: translate(120vw, -40vh) rotate(28deg); opacity: 0; }
+}
+
+/* ===== Reusable utility classes ===== */
+.font-serif  { font-family: var(--font-serif); }
+.font-script { font-family: var(--font-script); }
+
+.btn-romance {
+  background: linear-gradient(135deg, #FF7EB6, #FF4D6D);
+  border: none;
+  color: #fff;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  padding: 12px 28px;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(255,77,109,0.25);
+  transition: transform 0.2s, box-shadow 0.2s;
+  /* Touch target — Apple HIG / Material both recommend ≥ 44px */
+  min-height: 44px;
+}
+/* Only apply hover lift on devices that actually support hover. Touch
+ * devices simulate hover-on-tap and the lift sticks until the next tap,
+ * which looks like a stuck button. */
+@media (hover: hover) {
+  .btn-romance:hover { transform: translateY(-2px); box-shadow: 0 12px 26px rgba(255,77,109,0.32); }
+}
+.btn-romance:active { transform: translateY(0); }
+.btn-romance:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* ===== Element Plus Dialog: full-screen on phone =====
+ * Phones don't have a "modal" mental model — small dialogs floating on
+ * a phone feel cramped. Stretch every dialog edge-to-edge. */
+@media (max-width: 600px) {
+  .el-dialog {
+    --el-dialog-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    margin-top: 0 !important;
+    height: 100vh;
+    max-height: 100vh;
+    border-radius: 0 !important;
+    display: flex;
+    flex-direction: column;
+  }
+  .el-dialog__body {
+    flex: 1;
+    overflow-y: auto;
+  }
+  .el-overlay-dialog { padding: 0 !important; }
+}
