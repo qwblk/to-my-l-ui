@@ -94,9 +94,18 @@ function go(to: string) {
   left: 0; right: 0; bottom: 0;
   z-index: 90;
   display: flex;
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  /* Light frosted glass — kept the texture but at a small radius (4px)
+   * so this sticky tab bar doesn't re-rasterize every frame anything
+   * behind it changes (route slides, scroll, hover). The original 14px
+   * was a continuous paint cost on otherwise-static pages.
+   *
+   * Background opacity is intentionally high (0.94) so the blur layer's
+   * recompute on route changes is visually imperceptible — a more
+   * transparent glass would briefly "flash" as the page content swaps
+   * underneath during <Transition mode="out-in">. */
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   border-top: 1px solid var(--pink-300);
   /* iOS home-indicator safe area */
   padding-bottom: var(--safe-bottom, 0);

@@ -147,7 +147,7 @@ useGlobalEvents()
   <AppHeader v-if="auth.isLoggedIn && !hideChrome" />
   <div class="route-frame" :class="{ covered: hideChrome }">
     <router-view v-slot="{ Component }">
-      <Transition :name="slideName">
+      <Transition :name="slideName" mode="out-in">
         <component :is="Component" />
       </Transition>
     </router-view>
@@ -183,36 +183,37 @@ useGlobalEvents()
    * padding reserve normally used for the bottom tab bar. */
   --tab-bar-height: 0px;
 }
-.route-frame > .slide-left-leave-active,
-.route-frame > .slide-right-leave-active,
-.route-frame > .slide-soft-leave-active {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
+
+/* With <Transition mode="out-in"> the leaving page finishes before the
+ * entering one mounts, so we don't need `position: absolute` to take the
+ * leaving element out of flow — that was a hack for parallel mode that
+ * made the two pages fight for the same screen space. Serial transitions
+ * keep the layout stable. */
 
 .slide-left-enter-active,
 .slide-left-leave-active,
 .slide-right-enter-active,
 .slide-right-leave-active {
-  transition: transform 0.2s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.18s ease;
-  will-change: transform, opacity;
+  /* Short on purpose: out-in serializes the two phases (leave + enter)
+   * so total perceived duration is ~0.32s. Brisk enough that the user's
+   * next tap doesn't race the animation, slow enough to read as motion. */
+  transition: transform 0.16s cubic-bezier(0.22, 0.61, 0.36, 1),
+              opacity 0.16s cubic-bezier(0.22, 0.61, 0.36, 1);
 }
-.slide-left-enter-from   { transform: translate3d( 22%, 0, 0); opacity: 0; }
-.slide-left-leave-to     { transform: translate3d(-22%, 0, 0); opacity: 0; }
-.slide-right-enter-from  { transform: translate3d(-22%, 0, 0); opacity: 0; }
-.slide-right-leave-to    { transform: translate3d( 22%, 0, 0); opacity: 0; }
+.slide-left-enter-from   { transform: translate3d( 20%, 0, 0); opacity: 0; }
+.slide-left-leave-to     { transform: translate3d(-10%, 0, 0); opacity: 0; }
+.slide-right-enter-from  { transform: translate3d(-20%, 0, 0); opacity: 0; }
+.slide-right-leave-to    { transform: translate3d( 10%, 0, 0); opacity: 0; }
 
 /* Soft slide — visible motion without much travel, used on desktop and
- * on same-depth phone transitions. Translates ~8% so users feel the
+ * on same-depth phone transitions. Translates ~6px so users feel the
  * change happening rather than seeing a "snap + crossfade". */
 .slide-soft-enter-active,
 .slide-soft-leave-active {
-  transition: transform 0.22s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.18s ease;
-  will-change: transform, opacity;
+  transition: transform 0.14s ease, opacity 0.14s ease;
 }
-.slide-soft-enter-from { transform: translate3d(0, 8px, 0); opacity: 0; }
-.slide-soft-leave-to   { transform: translate3d(0, -8px, 0); opacity: 0; }
+.slide-soft-enter-from { transform: translate3d(0, 6px, 0); opacity: 0; }
+.slide-soft-leave-to   { transform: translate3d(0, -6px, 0); opacity: 0; }
 
 /* Don't animate when the user prefers reduced motion. */
 @media (prefers-reduced-motion: reduce) {

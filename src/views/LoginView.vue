@@ -73,6 +73,10 @@ async function handleLogin() {
     auth.setToken(res.data.token)
     chat.partnerOnline = res.data.partnerOnline
 
+    // Reset the per-session "home intro animation already played" flag
+    // so a fresh login replays the soft fade-up on /home once.
+    try { sessionStorage.removeItem('tml-home-intro-played') } catch { /* ignore */ }
+
     await auth.fetchCurrentUser()
 
     if (res.data.firstLogin) {

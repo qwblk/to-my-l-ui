@@ -72,6 +72,19 @@ const previewText = computed(() => {
 })
 const isLong = computed(() => (latestLetter.value?.content.length || 0) > PREVIEW_CHARS)
 
+/** Run the soft fade-up entrance only on the *first* visit to /home in
+ *  this login session. Subsequent visits (tab-switching back from diary,
+ *  chat, etc.) just show the page in place — the room has already been
+ *  introduced. The flag lives in sessionStorage so it auto-clears on
+ *  browser close, and LoginView removes it on successful login so each
+ *  new login replays the welcome animation once. */
+const HOME_INTRO_KEY = 'tml-home-intro-played'
+const playIntro = ref(false)
+if (!sessionStorage.getItem(HOME_INTRO_KEY)) {
+  playIntro.value = true
+  sessionStorage.setItem(HOME_INTRO_KEY, '1')
+}
+
 onMounted(async () => {
   await Promise.all([fetchSecondary(), messages.refreshLatest()])
   if (special.isSpecial.value && settings.value.showSpecialDateHint) {
@@ -135,7 +148,7 @@ function formatDateTime(s: string): string {
 </script>
 
 <template>
-  <div class="home-page">
+  <div class="home-page" :class="{ 'play-intro': playIntro }">
     <PullToRefresh @refresh="onPullRefresh" />
     <!-- Hero: the day counter -->
     <header class="hero">
@@ -241,7 +254,12 @@ function formatDateTime(s: string): string {
   padding: var(--space-page-y) var(--space-page-x);
   /* Reserve room for the bottom tab bar on small screens */
   padding-bottom: calc(var(--space-page-y) + var(--tab-bar-height));
-  animation: fade-up 0.7s ease-out;
+  /* Page entrance is normally owned by App.vue's <Transition>; the
+   * extra fade-up only runs on the first visit per login session
+   * (.play-intro), so day-to-day tab switching stays brisk. */
+}
+.home-page.play-intro {
+  animation: fade-up 0.4s ease-out;
 }
 
 .hero { text-align: center; margin-bottom: 24px; }

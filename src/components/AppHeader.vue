@@ -92,8 +92,19 @@ function handleLogout() {
 .app-header {
   display: flex; align-items: center; gap: 24px;
   padding: 0 24px; height: 56px;
-  background: rgba(255,255,255,0.85);
-  backdrop-filter: blur(12px);
+  /* Light frosted glass — kept the texture but at a small radius (4px)
+   * so this sticky header doesn't re-rasterize every frame anything
+   * scrolls behind it. The original 14px forced continuous paint
+   * across long sessions, especially on phones, for marginal visual
+   * gain.
+   *
+   * Background opacity is intentionally high (0.94) so the blur layer's
+   * recompute on route changes is visually imperceptible — a low-opacity
+   * glass over different page backgrounds reads as a brief "flash" when
+   * the underlying content swaps during <Transition mode="out-in">. */
+  background: rgba(255,255,255,0.94);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   border-bottom: 1px solid var(--pink-300);
   position: sticky; top: 0; z-index: 100;
 }
