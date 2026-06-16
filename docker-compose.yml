@@ -3,17 +3,24 @@
 # Production topology:
 #   browser  ->  this nginx container  ->  backend container/service
 #
-# nginx.conf reverse-proxies to the Docker DNS name `to-my-l-app:8081`.
-# Therefore the backend service/container must be attached to the same
-# Docker network and be reachable by the name `backend`.
+# nginx.conf reverse-proxies to the Docker DNS name `to-my-l-app:8081`,
+# which is the backend's container_name. The backend container must be
+# attached to the shared `to-my-l` Docker network and keep that
+# container_name — it's the upstream contract baked into nginx.conf.
 #
-# If your backend compose is separate, create the shared network once:
-#   docker network create to-my-l-net
-# and attach both compose stacks to that external network.
+# Network bootstrap: the backend compose declares the `to-my-l` network
+# with an explicit `name: to-my-l` (no compose project prefix), so this
+# stack joins it as `external: true`. Bring the backend stack up first;
+# this stack will then attach to the network the backend already created.
 #
 # VITE_* vars are PUBLIC build-time values baked into the SPA bundle.
 # Never put DB passwords, SaToken secrets, or other server-side secrets
 # here; those belong in the backend deployment only.
+#
+# VITE_CURRENT_USER_ID / VITE_PARTNER_USER_ID intentionally have NO
+# defaults: they decide who the SPA thinks each end is, and silently
+# falling back to 1/2 in production would be worse than failing loudly.
+# Set them in the shell or .env before `docker compose build`.
 
 services:
   app:
@@ -23,8 +30,8 @@ services:
       args:
         VITE_API_BASE: ${VITE_API_BASE:-/api}
         VITE_WS_BASE: ${VITE_WS_BASE:-}
-        VITE_CURRENT_USER_ID: ${VITE_CURRENT_USER_ID:-1}
-        VITE_PARTNER_USER_ID: ${VITE_PARTNER_USER_ID:-2}
+        VITE_CURRENT_USER_ID: ${VITE_CURRENT_USER_ID:?VITE_CURRENT_USER_ID is required}
+        VITE_PARTNER_USER_ID: ${VITE_PARTNER_USER_ID:?VITE_PARTNER_USER_ID is required}
         VITE_CURRENT_USER_NAME: ${VITE_CURRENT_USER_NAME:-}
         VITE_PARTNER_USER_NAME: ${VITE_PARTNER_USER_NAME:-}
         VITE_CURRENT_USERNAMES: ${VITE_CURRENT_USERNAMES:-}
@@ -37,9 +44,9 @@ services:
       - '${FRONTEND_HOST_PORT:-5173}:80'
     restart: unless-stopped
     networks:
-      - to-my-l_to-my-l
+      - to-my-l
 
 networks:
-  to-my-l_to-my-l:
+  to-my-l:
     name: to-my-l
     external: true
