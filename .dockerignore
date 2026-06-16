@@ -1,6 +1,43 @@
-node_modules
-dist
+# Keep the docker build context lean. Anything listed here is excluded
+# from the build, even if .gitignore would otherwise allow it.
+
+# Source control / CI
 .git
-*.md
+.gitignore
+.gitattributes
+.github
+
+# Editor / OS
 .vscode
 .idea
+.DS_Store
+Thumbs.db
+
+# Build outputs we don't want shipped from the host
+node_modules
+dist
+dist-ssr
+.vite
+*.tsbuildinfo
+
+# Local env files; the build accepts them via build args, never via copy
+.env
+.env.*
+!.env.example
+
+# Generated / private artifacts
+public/uploads
+uploads
+screenshots
+*.cache
+.parcel-cache
+
+# Long-form docs and design notes
+*.md
+!README.md
+
+# Secrets — defense in depth
+*.pem
+*.key
+*.crt
+secrets

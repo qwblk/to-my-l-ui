@@ -4,10 +4,16 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
 import client from '@/api/client'
-import type { Result, LoginResponse } from '@/types'
+import { getUser } from '@/api/user'
+import type { Result, LoginResponse, User } from '@/types'
 import { ElMessage } from 'element-plus'
 import { SINCE_DATE } from '@/constants/user'
 import { useHeartBurst } from '@/composables/useHeartBurst'
+import {
+  DEFAULT_FIRST_WELCOME,
+  FIRST_WELCOME_BY_USERNAME,
+  FIRST_WELCOME_STORAGE_KEY,
+} from '@/config/firstWelcome'
 
 // Resolve the illustration at build time. Vite's `import.meta.glob` lets
 // us reference an asset *if it exists* without breaking the build when
@@ -38,6 +44,19 @@ const rules = {
 // "Since 2026.05.24" — display dots, not dashes
 const sinceDisplay = SINCE_DATE.replace(/-/g, '.')
 
+function profileTextOf(u: User | null | undefined): string {
+  return u?.profileText || u?.bio || ''
+}
+function splitProfileText(text: string): string[] {
+  // Preserve intentional blank-line paragraphing if present; otherwise
+  // each non-empty line becomes a paragraph. If it's one long paragraph,
+  // it stays one paragraph exactly as written.
+  return text
+    .split(/\n{2,}|\r?\n/)
+    .map(s => s.trim())
+    .filter(Boolean)
+}
+
 async function handleLogin() {
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
@@ -54,8 +73,36 @@ async function handleLogin() {
     auth.setToken(res.data.token)
     chat.partnerOnline = res.data.partnerOnline
 
-    ElMessage.success(res.data.firstLogin ? res.data.greeting : '欢迎回来')
     await auth.fetchCurrentUser()
+
+    if (res.data.firstLogin) {
+      const username = form.username.trim().toLowerCase()
+      let payload = FIRST_WELCOME_BY_USERNAME[username] || DEFAULT_FIRST_WELCOME
+
+      // For the receiver's first login, prefer the *other user's* profile
+      // text (profileText/bio). This lets the owner edit the welcome letter
+      // from "我的" → profile text, and the first-login card always shows
+      // the current stored wording rather than a hardcoded frontend copy.
+      try {
+        const partnerId = auth.currentUser?.id === 1 ? 2 : 1
+        const partner = await getUser(partnerId)
+        const text = profileTextOf(partner.data)
+        if (text) {
+          payload = {
+            title: '写给你的话',
+            paragraphs: splitProfileText(text),
+            confirmText: '我慢慢看',
+          }
+        }
+      } catch {
+        // If partner profile lookup fails, fall back to local configured text.
+      }
+
+      sessionStorage.removeItem('tml:first-welcome')
+      sessionStorage.setItem(FIRST_WELCOME_STORAGE_KEY, JSON.stringify(payload))
+      window.dispatchEvent(new CustomEvent('tml:first-welcome-ready'))
+    }
+    ElMessage.success(res.data.firstLogin ? '欢迎来到 To My L' : '欢迎回来')
     // Celebrate the moment of arrival — four-corner sparkle
     setTimeout(() => hearts.corners(), 80)
     router.push('/')

@@ -1,9 +1,45 @@
+# Compose for the front-end nginx container.
+#
+# Production topology:
+#   browser  ->  this nginx container  ->  backend container/service
+#
+# nginx.conf reverse-proxies to the Docker DNS name `to-my-l-app:8081`.
+# Therefore the backend service/container must be attached to the same
+# Docker network and be reachable by the name `backend`.
+#
+# If your backend compose is separate, create the shared network once:
+#   docker network create to-my-l-net
+# and attach both compose stacks to that external network.
+#
+# VITE_* vars are PUBLIC build-time values baked into the SPA bundle.
+# Never put DB passwords, SaToken secrets, or other server-side secrets
+# here; those belong in the backend deployment only.
+
 services:
   app:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        VITE_API_BASE: ${VITE_API_BASE:-/api}
+        VITE_WS_BASE: ${VITE_WS_BASE:-}
+        VITE_CURRENT_USER_ID: ${VITE_CURRENT_USER_ID:-1}
+        VITE_PARTNER_USER_ID: ${VITE_PARTNER_USER_ID:-2}
+        VITE_CURRENT_USER_NAME: ${VITE_CURRENT_USER_NAME:-}
+        VITE_PARTNER_USER_NAME: ${VITE_PARTNER_USER_NAME:-}
+        VITE_CURRENT_USERNAMES: ${VITE_CURRENT_USERNAMES:-}
+        VITE_PARTNER_USERNAMES: ${VITE_PARTNER_USERNAMES:-}
+        VITE_SINCE_DATE: ${VITE_SINCE_DATE:-}
+        VITE_PARTNER_BIRTHDAY_MMDD: ${VITE_PARTNER_BIRTHDAY_MMDD:-}
+    image: to-my-l-ui:latest
     container_name: to-my-l-ui
     ports:
-      - '5173:80'
+      - '${FRONTEND_HOST_PORT:-5173}:80'
     restart: unless-stopped
+    networks:
+      - to-my-l_to-my-l
+
+networks:
+  to-my-l_to-my-l:
+    name: to-my-l
+    external: true

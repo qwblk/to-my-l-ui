@@ -25,6 +25,11 @@ export const useAuthStore = defineStore('auth', () => {
       const res = await getMe()
       currentUser.value = res.data
     } catch {
+      // /user/me failing means the local token is no longer trustworthy.
+      // We don't navigate here ourselves — the axios interceptor in
+      // client.ts already shows the "登录已过期" prompt and the user
+      // confirms when to leave. Just clear local state so other watchers
+      // don't keep firing on a half-dead session.
       currentUser.value = null
     }
   }

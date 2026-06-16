@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { getChatHistory } from '@/api/chat'
+import { WS_BASE } from '@/config/env'
 import type { ChatMessage, MomentMedia, WsMessage } from '@/types'
 
 const HEART_MARKER = '__TML_HEART__'
@@ -32,8 +33,13 @@ export const useChatStore = defineStore('chat', () => {
   let myUsername = ''
   let myDisplayName = ''
   let shouldReconnect = true
+  /** Set when the server tells us a new session has signed in with the
+   *  same account. Both the kicked WS frame and the close(4001) path read
+   *  this so we don't reconnect and don't double-announce. */
+  let kickedFlag = false
   const eventListeners: WsEventCallback[] = []
   let loginGraceTimer: ReturnType<typeof setTimeout> | null = null
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 
   function onEvent(cb: WsEventCallback) {
     eventListeners.push(cb)
@@ -62,12 +68,14 @@ export const useChatStore = defineStore('chat', () => {
       return
     }
     shouldReconnect = true
+    kickedFlag = false
     myUsername = username
     if (displayName) myDisplayName = displayName
     window.addEventListener('beforeunload', onBeforeUnload)
     if (partnerOnline.value) startLoginGrace()
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
-    ws = new WebSocket(`${proto}//localhost:8081/ws/chat?username=${username}`)
+    const base = WS_BASE || `${proto}//${location.host}`
+    ws = new WebSocket(`${base}/ws/chat?username=${encodeURIComponent(username)}`)
 
     ws.onopen = () => {
       console.log('%c[WS] %c已连接', 'color: #10b981; font-weight: bold;', 'color: #5C4A52;')
@@ -100,8 +108,21 @@ export const useChatStore = defineStore('chat', () => {
         return
       }
 
-      // Server-sent chat history can arrive as a WS history frame. Accept
-      // data.messages / data.list as ChatMessage[] and prepend older items.
+      // "Kicked" frame: backend tells the older session that a new device
+      // just signed in with the same account. Stop reconnecting, drop the
+      // session, fire an event so the UI can show a notice + redirect to
+      // /login. Treat the close that immediately follows (code 4001) as
+      // expected, not a transient disconnect.
+      if (msg.type === 'kicked') {
+        kickedFlag = true
+        shouldReconnect = false
+        lastEventTime.value = Date.now()
+        lastEventType.value = 'kicked'
+        emitEvent(msg)
+        return
+      }
+
+      // Server-sent chat history can arrive as a WS history frame.
       if (msg.type === 'history') {
         const list = (msg.data?.messages || msg.data?.list) as ChatMessage[] | undefined
         if (Array.isArray(list)) prependHistory(list)
@@ -134,11 +155,36 @@ export const useChatStore = defineStore('chat', () => {
       emitEvent(msg)
     }
 
-    ws.onclose = () => {
-      console.log('%c[WS] %c断开连接，3秒后重连', 'color: #f59e0b; font-weight: bold;', 'color: #5C4A52;')
+    ws.onclose = (ev) => {
       isConnected.value = false
       ws = null
-      setTimeout(() => {
+      // Backend's "kicked" close uses code 4001 (per API contract). Either
+      // we already saw the kicked frame and set the flag, or we receive the
+      // close before the frame is processed — both cases must avoid the
+      // reconnect loop and emit a single kicked event so the UI can act.
+      if (ev.code === 4001 || kickedFlag) {
+        if (!kickedFlag) {
+          kickedFlag = true
+          lastEventTime.value = Date.now()
+          lastEventType.value = 'kicked'
+          emitEvent({
+            sender: 'SYSTEM',
+            content: 'Logged in elsewhere',
+            time: '',
+            type: 'kicked',
+          })
+        }
+        shouldReconnect = false
+        console.log('%c[WS] %c账号在其他设备登录，已断开', 'color: #f43f5e; font-weight: bold;', 'color: #5C4A52;')
+        return
+      }
+      console.log('%c[WS] %c断开连接，3秒后重连', 'color: #f59e0b; font-weight: bold;', 'color: #5C4A52;')
+      // Track the timer so disconnect() can cancel it before it fires.
+      // Otherwise a fast disconnect+reconnect cycle (logout → login as
+      // someone else, kicked → re-auth, etc.) could let the *previous*
+      // user's reconnect attempt land after the new connection started.
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null
         if (!ws && shouldReconnect) connect(username)
       }, 3000)
     }
@@ -152,6 +198,7 @@ export const useChatStore = defineStore('chat', () => {
     shouldReconnect = false
     window.removeEventListener('beforeunload', onBeforeUnload)
     if (loginGraceTimer) { clearTimeout(loginGraceTimer); loginGraceTimer = null }
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null }
     ws?.close()
     ws = null
     isConnected.value = false

@@ -52,3 +52,12 @@ export function getDiaryDay(params: {
 export function deleteDiary(diaryId: number) {
   return client.delete<unknown, Result<null>>(`/diary/${diaryId}`)
 }
+
+/**
+ * Toggle the privacy flag of an owned diary entry. Backend should accept
+ * isPrivate as 0 / 1, broadcast `diary` so the partner side rerenders.
+ * If the endpoint isn't yet shipped, UI will surface "还没准备好".
+ */
+export function updateDiaryPrivacy(diaryId: number, isPrivate: 0 | 1) {
+  return client.put<unknown, Result<Diary>>(`/diary/${diaryId}/privacy`, { isPrivate })
+}

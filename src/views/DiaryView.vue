@@ -17,6 +17,7 @@ import {
   getDiaryDays,
   getDiaryDay,
   deleteDiary,
+  updateDiaryPrivacy,
   type DiaryScope,
 } from '@/api/diary'
 import type { Diary, DiaryCreateRequest, DiaryDayGroup } from '@/types'
@@ -40,6 +41,10 @@ const loadingMore = ref(false)
 const hasMore = ref(true)
 const nextCursorDate = ref<string | null>(null)
 const tab = ref<DiaryScope>(settings.value.diaryDefaultScope)
+/** Only meaningful when tab === 'mine': filter the visible diaries by
+ *  privacy. 'all' shows everything, 'public' filters to entries the
+ *  partner can see, 'private' to ones marked 仅自己可见. */
+const mineFilter = ref<'all' | 'public' | 'private'>('all')
 const showCreate = ref(false)
 const showMobileCalendar = ref(false)
 const selectedDate = ref<string | undefined>(undefined)
@@ -81,6 +86,19 @@ function weatherEmoji(v: string | null) { return WEATHERS.find(w => w.value === 
  *  individually queried via /diary/day. */
 const diaryDateKeys = computed(() => dayGroups.value.map((g) => g.date))
 
+/** Apply the mine-only privacy filter without mutating store state. The
+ *  feed always loads everything; visibility decisions live here. */
+const visibleDayGroups = computed<DiaryDayGroup[]>(() => {
+  if (tab.value !== 'mine' || mineFilter.value === 'all') return dayGroups.value
+  const want = mineFilter.value === 'private' ? 1 : 0
+  const out: DiaryDayGroup[] = []
+  for (const g of dayGroups.value) {
+    const entries = g.entries.filter((e) => (e.isPrivate ?? 0) === want)
+    if (entries.length) out.push({ ...g, entries })
+  }
+  return out
+})
+
 onMounted(async () => {
   if (route.query.compose === '1') {
     showCreate.value = true
@@ -98,7 +116,21 @@ onBeforeUnmount(() => observer?.disconnect())
 
 watch(() => chat.lastEventTime, (t, old) => {
   if (!t || t === old) return
-  if (chat.lastEventType === 'diary' || chat.lastEventType === 'diary_delete') {
+  // diary_delete: a row was removed somewhere — reset to drop it from the
+  // local feed reliably.
+  if (chat.lastEventType === 'diary_delete') {
+    resetAndLoad()
+    return
+  }
+  // diary: covers create / privacy update / future edits. We only want to
+  // refresh when the event was authored by *the partner*; events triggered
+  // by our own actions have already been mirrored optimistically and
+  // resetAndLoad would scroll the user back to the top, which feels like
+  // an unwanted page refresh.
+  if (chat.lastEventType === 'diary') {
+    const data = (chat.messages.at(-1)?.data || {}) as Record<string, unknown>
+    const actorId = data.userId as number | undefined
+    if (actorId !== undefined && actorId === auth.currentUser?.id) return
     resetAndLoad()
   }
 })
@@ -258,6 +290,30 @@ async function handleDelete(group: DiaryDayGroup, entry: Diary) {
   }
 }
 
+async function handleTogglePrivacy(entry: Diary) {
+  if (entry.userId !== auth.currentUser?.id) return
+  const next: 0 | 1 = entry.isPrivate ? 0 : 1
+
+  // Optimistic flip; revert on failure.
+  const prev = entry.isPrivate
+  entry.isPrivate = next
+
+  try {
+    await updateDiaryPrivacy(entry.id, next)
+    ElMessage.success(next ? '已设为仅自己可见' : '已设为对方也能看见')
+  } catch (e: any) {
+    entry.isPrivate = prev
+    const status = e?.code ?? e?.response?.status
+    if (status === 404 || status === 405) {
+      ElMessage.warning('修改可见范围还没准备好（后端 PUT /diary/{id}/privacy 接口尚未上线）')
+    } else if (status === 403) {
+      ElMessage.error('只能修改自己写的日记')
+    } else {
+      ElMessage.error(e?.msg || '修改失败')
+    }
+  }
+}
+
 /** Calendar click: use /diary/day so the selected day works even if it
  * hasn't been included in the current paginated window yet. */
 async function onDateSelect(dateKey: string) {
@@ -318,7 +374,7 @@ function isOwned(d: Diary): boolean { return auth.currentUser?.id === d.userId }
           <button
             class="tab-btn"
             :class="{ active: tab === 'all' }"
-            @click="tab = 'all'; onTabChange()"
+            @click="tab = 'all'; mineFilter = 'all'; onTabChange()"
           >全部</button>
           <button
             class="tab-btn"
@@ -327,14 +383,20 @@ function isOwned(d: Diary): boolean { return auth.currentUser?.id === d.userId }
           >只看我的</button>
         </div>
 
+        <div v-if="tab === 'mine'" class="mine-filter">
+          <button :class="{ active: mineFilter === 'all' }" @click="mineFilter = 'all'">全部</button>
+          <button :class="{ active: mineFilter === 'public' }" @click="mineFilter = 'public'">公开</button>
+          <button :class="{ active: mineFilter === 'private' }" @click="mineFilter = 'private'">仅自己可见</button>
+        </div>
+
         <div v-loading="loading" class="diary-list">
-          <p v-if="!loading && dayGroups.length === 0" class="empty-hint">
+          <p v-if="!loading && visibleDayGroups.length === 0" class="empty-hint">
             还是空的呢。<br />
             <span class="empty-cta" @click="showCreate = true">写下第一篇 →</span>
           </p>
 
           <article
-            v-for="group in dayGroups" :key="group.date"
+            v-for="group in visibleDayGroups" :key="group.date"
             :id="'day-' + group.date"
             class="letter-day"
           >
@@ -361,6 +423,9 @@ function isOwned(d: Diary): boolean { return auth.currentUser?.id === d.userId }
                   <button class="menu-btn" type="button" aria-label="更多">⋮</button>
                   <template #dropdown>
                     <el-dropdown-menu>
+                      <el-dropdown-item @click="handleTogglePrivacy(entry)">
+                        <span>{{ entry.isPrivate ? '改为对方也能看' : '设为仅自己可见' }}</span>
+                      </el-dropdown-item>
                       <el-dropdown-item @click="handleDelete(group, entry)">
                         <span class="danger-item">删除这一段</span>
                       </el-dropdown-item>
@@ -565,6 +630,27 @@ function isOwned(d: Diary): boolean { return auth.currentUser?.id === d.userId }
 }
 @media (hover: hover) { .tab-btn:hover { background: var(--pink-200); } }
 .tab-btn.active { background: linear-gradient(135deg, var(--pink-600), var(--rose-heart)); color: #fff; border-color: transparent; }
+
+.mine-filter {
+  display: flex; gap: 6px; justify-content: center;
+  margin: -8px 0 18px;
+  font-size: 12px;
+}
+.mine-filter button {
+  padding: 4px 12px;
+  background: transparent;
+  border: 1px solid var(--pink-300);
+  border-radius: 999px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  min-height: 30px;
+}
+@media (hover: hover) { .mine-filter button:hover { background: var(--pink-200); } }
+.mine-filter button.active {
+  background: var(--pink-200);
+  color: var(--pink-700);
+  border-color: var(--pink-600);
+}
 
 .empty-hint { text-align: center; color: var(--ink-mute); font-size: 15px; line-height: 2; padding: 60px 0; }
 .empty-cta { color: var(--pink-700); cursor: pointer; }

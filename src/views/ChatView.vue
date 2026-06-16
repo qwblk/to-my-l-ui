@@ -147,6 +147,9 @@ function sepLabel(time: string | undefined): string {
 }
 
 let stopWsEvents: (() => void) | null = null
+function onVisibilityChange() {
+  if (document.visibilityState === 'visible') chat.markChatRead()
+}
 
 onMounted(async () => {
   if (auth.currentUser) chat.connect(auth.currentUser.username, auth.currentUser.name)
@@ -174,6 +177,7 @@ onMounted(async () => {
   // history. Idiom: any scroll position more than 80px from the bottom
   // counts as "reading history."
   chatContainer.value?.addEventListener('scroll', onMessagesScroll, { passive: true })
+  document.addEventListener('visibilitychange', onVisibilityChange)
   stopWsEvents = chat.onEvent((msg) => {
     if (msg.type === 'heart' && msg.sender !== auth.currentUser?.name) {
       heartPulse.value++
@@ -183,14 +187,16 @@ onMounted(async () => {
 })
 onBeforeUnmount(() => {
   chatContainer.value?.removeEventListener('scroll', onMessagesScroll)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
   stopWsEvents?.()
 })
 
 watch(() => chat.messages.length, () => {
   if (stickToBottom.value) scrollToBottom()
-  // While the chat page is visible any new chat is already on screen,
-  // so the unread counter shouldn't carry over to the nav badges.
-  chat.markChatRead()
+  // Only clear unread when the tab is actually visible. If the user is
+  // "on" /chat but the browser is backgrounded, incoming messages should
+  // still count as unread and trigger desktop notification.
+  if (document.visibilityState === 'visible') chat.markChatRead()
 })
 
 async function onMessagesScroll() {

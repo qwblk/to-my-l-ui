@@ -7,18 +7,40 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Builds / deps
 node_modules
 dist
 dist-ssr
-*.local
+.vite/
+*.tsbuildinfo
 
-# Editor directories and files
+# Local-only env files. .env.example is the committed reference.
+.env
+.env.*
+!.env.example
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 .idea
-.DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+*.local
+
+# Locally-generated artifacts that should never be committed
+public/uploads/
+uploads/
+screenshots/
+*.cache/
+.parcel-cache
+
+# Sensitive defaults — never check in real values
+*.pem
+*.key
+*.crt
+secrets/

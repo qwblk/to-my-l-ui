@@ -4,6 +4,7 @@ import { useAuthStore } from '@/stores/auth'
 import AppHeader from '@/components/AppHeader.vue'
 import MobileTabBar from '@/components/MobileTabBar.vue'
 import FloatingHearts from '@/components/FloatingHearts.vue'
+import FirstWelcomeModal from '@/components/FirstWelcomeModal.vue'
 import { useGlobalEvents } from '@/ws/useGlobalEvents'
 import { registerHearts } from '@/composables/useHeartBurst'
 import { useOfflineCatchup } from '@/composables/useOfflineCatchup'
@@ -137,6 +138,7 @@ useGlobalEvents()
 
 <template>
   <FloatingHearts ref="heartsRef" />
+  <FirstWelcomeModal />
   <AppHeader v-if="auth.isLoggedIn && !hideChrome" />
   <div class="route-frame" :class="{ covered: hideChrome }">
     <router-view v-slot="{ Component }">

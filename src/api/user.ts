@@ -36,7 +36,9 @@ export interface UpdateProfileRequest {
   name?: string
   gender?: number
   birthday?: string  // yyyy-MM-dd
+  profileText?: string
 }
+
 export function updateMyProfile(data: UpdateProfileRequest) {
   return client.put<unknown, Result<User>>('/user/me', data)
 }

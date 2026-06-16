@@ -1,7 +1,15 @@
-// User display name mapping
+import {
+  CURRENT_USER_ID,
+  CURRENT_USER_NAME,
+  PARTNER_BIRTHDAY_MMDD,
+  PARTNER_USER_ID,
+  PARTNER_USER_NAME,
+  SINCE_DATE_ENV,
+} from '@/config/env'
+
 export const USER_NAMES: Record<number, string> = {
-  1: '王水群',
-  2: '潘佩雪',
+  [CURRENT_USER_ID]: CURRENT_USER_NAME,
+  [PARTNER_USER_ID]: PARTNER_USER_NAME,
 }
 
 export function getUserDisplayName(id: number): string {
@@ -9,15 +17,15 @@ export function getUserDisplayName(id: number): string {
 }
 
 export function getPartnerDisplayName(myId: number): string {
-  return myId === 1 ? '潘佩雪' : '王水群'
+  return myId === CURRENT_USER_ID ? PARTNER_USER_NAME : CURRENT_USER_NAME
 }
 
 // The day they first met / first spoke — anchor for "第 N 天" counters across the app
-export const SINCE_DATE = '2026-05-24'
+export const SINCE_DATE = SINCE_DATE_ENV
 
 // Special dates that trigger heart-rain on the home page
 // Format: 'MM-DD' (year-agnostic, fires every year)
 export const SPECIAL_DATES: Record<string, string> = {
-  '05-24': '是我们认识的日子',
-  '03-22': '是属于你的日子', // 潘佩雪的生日
+  [SINCE_DATE.slice(5)]: '是我们认识的日子',
+  [PARTNER_BIRTHDAY_MMDD]: '是属于你的日子',
 }

@@ -83,11 +83,26 @@ export function useGlobalEvents() {
     // Skip own echoes
     if (msg.sender === auth.currentUser?.name) return
 
+    // === Kicked: another device just signed in with the same account ===
+    if (msg.type === 'kicked') {
+      ElNotification({
+        title: '已在其他设备登录',
+        message: '当前会话已断开，请重新登录',
+        type: 'warning',
+        duration: 5000,
+        position: 'top-right',
+      })
+      // Drop local auth and route back to /login. Use a short delay so
+      // the toast stays readable across the navigation.
+      setTimeout(() => {
+        try { localStorage.removeItem('token') } catch { /* ignore */ }
+        window.location.replace('/login')
+      }, 600)
+      return
+    }
+
     // === Live chat from the partner ===
     if (msg.type === 'chat') {
-      // Currently watching the chat tab → no overlay; the bubble in the
-      // ChatView is feedback enough.
-      if (isOnChatPage()) return
       const partnerName = msg.sender || (auth.currentUser?.id ? getPartnerDisplayName(auth.currentUser.id) : '对方')
       const media = (msg.data?.mediaList as MomentMedia[] | undefined) || []
       const preview = msg.content?.trim()
@@ -97,12 +112,16 @@ export function useGlobalEvents() {
           : ''
       const title = '💬 ' + partnerName
       const body = preview
-      // Tab in the background → real desktop notification (also keep the
-      // in-app toast so when the user comes back the recent state is still
-      // visible). Foreground → just toast.
+
+      // Rule:
+      // - Foreground + currently on /chat: no reminder (bubble is enough)
+      // - Hidden/background: desktop notification even if current route is /chat
+      // - Foreground + not on /chat: in-app toast
       if (isHidden()) {
         desktopNotify(title, body)
+        return
       }
+      if (isOnChatPage()) return
       notify(title, body, 'success')
       return
     }

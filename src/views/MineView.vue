@@ -77,6 +77,23 @@ function formatBirthday(b: string | undefined): string {
 const meBirthdayCountdown = computed(() => daysUntilBirthday(me.value?.birthday))
 const partnerBirthdayCountdown = computed(() => daysUntilBirthday(partner.value?.birthday))
 
+const PROFILE_PREVIEW_LIMIT = 60
+const profileDialog = reactive({ show: false, title: '', text: '' })
+function profileTextOf(u: User | null | undefined): string {
+  return u?.profileText || u?.bio || ''
+}
+function profilePreview(text: string): string {
+  return text
+}
+function isProfileLong(text: string): boolean {
+  return text.length > PROFILE_PREVIEW_LIMIT
+}
+function openProfileText(title: string, text: string) {
+  profileDialog.title = title
+  profileDialog.text = text
+  profileDialog.show = true
+}
+
 // === Edit profile dialog ===
 const showEdit = ref(false)
 const saving = ref(false)
@@ -84,14 +101,16 @@ interface EditForm {
   name: string
   gender: number
   birthday: string
+  profileText: string
 }
-const editForm = reactive<EditForm>({ name: '', gender: 0, birthday: '' })
+const editForm = reactive<EditForm>({ name: '', gender: 0, birthday: '', profileText: '' })
 
 function openEdit() {
   if (!me.value) return
   editForm.name = me.value.name ?? ''
   editForm.gender = me.value.gender ?? 0
   editForm.birthday = me.value.birthday ?? ''
+  editForm.profileText = me.value.profileText ?? me.value.bio ?? ''
   showEdit.value = true
 }
 
@@ -106,6 +125,7 @@ async function saveProfile() {
       name: editForm.name.trim(),
       gender: editForm.gender,
       birthday: editForm.birthday || undefined,
+      profileText: editForm.profileText,
     })
     if (res.data && auth.currentUser) {
       // Patch the in-memory user. Don't replace the whole object so other
@@ -114,6 +134,8 @@ async function saveProfile() {
       auth.currentUser.gender = res.data.gender
       auth.currentUser.birthday = res.data.birthday
       auth.currentUser.age = res.data.age
+      auth.currentUser.bio = res.data.bio
+      auth.currentUser.profileText = res.data.profileText
     }
     ElMessage.success('保存成功')
     showEdit.value = false
@@ -164,6 +186,16 @@ function logout() {
         <p class="line"><span>性别</span><strong>{{ genderLabel(me?.gender) }}</strong></p>
         <p class="line"><span>生日</span><strong>{{ formatBirthday(me?.birthday) }}</strong></p>
         <p class="line"><span>年龄</span><strong>{{ me?.age ?? '—' }}</strong></p>
+        <div class="profile-text">
+          <span>写给对方的话</span>
+          <p>{{ profileTextOf(me) ? profilePreview(profileTextOf(me)) : '还没有写。' }}</p>
+          <button
+            v-if="isProfileLong(profileTextOf(me))"
+            type="button"
+            class="read-more"
+            @click="openProfileText('写给对方的话', profileTextOf(me))"
+          >查看全文</button>
+        </div>
       </article>
 
       <article class="person partner-card" v-loading="partnerLoading">
@@ -181,6 +213,16 @@ function logout() {
           <strong v-if="partnerBirthdayCountdown !== null">{{ partnerBirthdayCountdown }} 天</strong>
           <strong v-else>—</strong>
         </p>
+        <div class="profile-text">
+          <span>{{ partner?.name || partnerName }}留下的话</span>
+          <p>{{ profileTextOf(partner) ? profilePreview(profileTextOf(partner)) : '还没有写。' }}</p>
+          <button
+            v-if="isProfileLong(profileTextOf(partner))"
+            type="button"
+            class="read-more"
+            @click="openProfileText((partner?.name || partnerName) + '留下的话', profileTextOf(partner))"
+          >查看全文</button>
+        </div>
       </article>
     </section>
 
@@ -216,6 +258,15 @@ function logout() {
 
     <button class="logout" @click="logout">退出登录</button>
 
+    <el-dialog
+      v-model="profileDialog.show"
+      width="560px"
+      :title="profileDialog.title"
+      class="profile-dialog"
+    >
+      <div class="profile-full font-serif">{{ profileDialog.text }}</div>
+    </el-dialog>
+
     <!-- Edit profile dialog -->
     <el-dialog
       v-model="showEdit"
@@ -238,9 +289,18 @@ function logout() {
           </div>
         </label>
 
-        <label class="field">
+        <label class="field profile-field">
           <span>生日</span>
           <input type="date" v-model="editForm.birthday" />
+        </label>
+
+        <label class="field profile-field full">
+          <span>写给对方的话</span>
+          <textarea
+            v-model="editForm.profileText"
+            maxlength="10000"
+            placeholder="可以写一段想让对方看到的话…"
+          ></textarea>
         </label>
       </div>
       <template #footer>
@@ -369,6 +429,63 @@ function logout() {
 }
 .line span { color: var(--ink-mute); }
 .line strong { color: var(--ink-warm); font-weight: 500; }
+.profile-text {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--pink-300);
+}
+.profile-text span {
+  display: block;
+  font-size: 12px;
+  color: var(--ink-mute);
+  margin-bottom: 6px;
+}
+.profile-text p {
+  margin: 0;
+  color: var(--ink-warm);
+  font-size: 13px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-break: break-word;
+  /* Show at most three lines on the card. Full text is available in
+   * the dialog opened by “查看全文”. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.read-more {
+  margin-top: 8px;
+  padding: 4px 10px;
+  border: 1px solid var(--pink-300);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--pink-700);
+  font-size: 12px;
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .read-more:hover { background: var(--pink-200); border-color: var(--pink-600); }
+}
+.profile-full {
+  max-height: min(60vh, 520px);
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 2;
+  color: var(--ink-warm);
+  background: #FFFCFD;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 31px,
+    var(--pink-200) 31px,
+    var(--pink-200) 32px
+  );
+  border-left: 4px solid var(--pink-400);
+  border-radius: 14px;
+  padding: 18px 22px;
+}
 
 /* Anchor */
 .anchor {
@@ -558,7 +675,8 @@ function logout() {
 .edit-body { display: flex; flex-direction: column; gap: 14px; }
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field > span { font-size: 12px; color: var(--ink-mute); }
-.field input {
+.field input,
+.field textarea {
   padding: 10px 12px;
   border: 1px solid var(--pink-300);
   border-radius: 10px;
@@ -566,8 +684,15 @@ function logout() {
   color: var(--ink-warm);
   background: #fff;
   outline: none;
+  font-family: var(--font-body);
 }
-.field input:focus { border-color: var(--pink-600); }
+.field textarea {
+  min-height: 150px;
+  resize: vertical;
+  line-height: 1.7;
+}
+.field input:focus,
+.field textarea:focus { border-color: var(--pink-600); }
 .seg-inline { display: flex; gap: 8px; }
 .seg-inline button {
   flex: 1;

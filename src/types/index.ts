@@ -28,6 +28,10 @@ export interface User {
   age: number
   createTime: string
   updateTime: string
+  /** Legacy/raw DB field. Backend maps profileText <-> bio. */
+  bio?: string | null
+  /** Personal profile text shown to the other user; editable by self. */
+  profileText?: string | null
   /** Server-tracked "last active" timestamp (yyyy-MM-dd HH:mm:ss).
    *  Null for users who have never hit the heartbeat endpoint. */
   lastSeenAt?: string | null
@@ -154,6 +158,7 @@ export type WsType =
   | 'online'
   | 'offline'
   | 'status'
+  | 'kicked'
   | 'diary'
   | 'diary_delete'
   | 'moment'

@@ -20,10 +20,11 @@
 import { ElNotification } from 'element-plus'
 import { getReceivedMessages } from '@/api/message'
 import { getAllDiaries } from '@/api/diary'
+import { getChatHistory } from '@/api/chat'
 import { heartbeat as apiHeartbeat, getLastSeen as apiGetLastSeen } from '@/api/user'
 import { useAuthStore } from '@/stores/auth'
 import { getPartnerDisplayName } from '@/constants/user'
-import type { Message, Diary } from '@/types'
+import type { Message, Diary, ChatMessage } from '@/types'
 
 // v2: previous versions had a bug where beforeunload could write a
 // too-recent local anchor that wasn't reflected on the server, causing
@@ -38,9 +39,9 @@ const MAX_PER_KIND = 5
 let runInFlight = false
 
 interface CatchupItem {
-  kind: 'message' | 'diary'
+  kind: 'message' | 'diary' | 'chat'
   ts: number
-  payload: Message | Diary
+  payload: Message | Diary | ChatMessage
 }
 
 function localKey(userId: number): string {
@@ -200,6 +201,24 @@ export function useOfflineCatchup() {
       for (const d of fresh) items.push({ kind: 'diary', ts: parseServerTime(d.createTime), payload: d })
     } catch (err) { console.warn('[catchup] getAllDiaries failed', err) }
 
+    // Chat catch-up: chat history is paginated by cursor (newest first).
+    // We pull the freshest page and surface anything from the partner that
+    // arrived strictly after `since`. Cap at MAX_PER_KIND so a long offline
+    // gap doesn't fan out into a wall of notifications.
+    try {
+      const chat = await getChatHistory({ size: 30 })
+      const list = chat.data.list || []
+      const fresh = list
+        .filter(m => m.senderId !== me.id && parseServerTime(m.createTime) > since)
+        .sort((a, b) => parseServerTime(a.createTime) - parseServerTime(b.createTime))
+        .slice(-MAX_PER_KIND)
+      console.log(
+        `%c[catchup] %cchat: ${list.length} pulled, ${fresh.length} fresh after since`,
+        'color: #8b5cf6; font-weight: bold;', 'color: #5C4A52;',
+      )
+      for (const m of fresh) items.push({ kind: 'chat', ts: parseServerTime(m.createTime), payload: m })
+    } catch (err) { console.warn('[catchup] getChatHistory failed', err) }
+
     // Bookmark immediately so a refresh mid-replay won't repeat anything.
     // This pushes server lastSeenAt and (on success) the in-memory mirror
     // forward; on failure it leaves the previous anchor intact.
@@ -226,11 +245,29 @@ export function useOfflineCatchup() {
         duration: 5000,
         position: 'top-right',
       })
-    } else {
+    } else if (it.kind === 'diary') {
       const d = it.payload as Diary
       ElNotification({
         title: '📖 离线期间的新日记',
         message: `${partnerName}写了：${d.title}`,
+        type: 'success',
+        duration: 5000,
+        position: 'top-right',
+      })
+    } else {
+      const c = it.payload as ChatMessage
+      // Chat preview: text first, fall back to media hint when content is
+      // empty (image/video-only chat).
+      const hasMedia = Array.isArray(c.mediaList) && c.mediaList.length > 0
+      const firstMedia = hasMedia ? c.mediaList![0] : null
+      const preview = c.content?.trim()
+        ? truncate(c.content, 40)
+        : firstMedia
+          ? (firstMedia.type === 'image' ? '[图片]' : '[视频]')
+          : ''
+      ElNotification({
+        title: '💬 离线期间的消息',
+        message: `${partnerName}：${preview}`,
         type: 'success',
         duration: 5000,
         position: 'top-right',
