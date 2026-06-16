@@ -13,11 +13,11 @@ export function getSentMessages() {
   return client.get<unknown, Result<Message[]>>('/message/sent')
 }
 
-export function getReceivedMessagesPage(params?: { cursor?: string | null; size?: number }) {
+export function getReceivedMessagesPage(params?: { cursor?: string | null; cursorId?: number | null; size?: number }) {
   return client.get<unknown, Result<MessagePageResponse>>('/message/received/page', { params })
 }
 
-export function getSentMessagesPage(params?: { cursor?: string | null; size?: number }) {
+export function getSentMessagesPage(params?: { cursor?: string | null; cursorId?: number | null; size?: number }) {
   return client.get<unknown, Result<MessagePageResponse>>('/message/sent/page', { params })
 }
 

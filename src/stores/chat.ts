@@ -21,6 +21,7 @@ export const useChatStore = defineStore('chat', () => {
   const connectedAt = ref(0)
   const loadingHistory = ref(false)
   const historyCursor = ref<string | null>(null)
+  const historyCursorId = ref<number | null>(null)
   const historyHasMore = ref(true)
   const historyLoaded = ref(false)
   const historyError = ref('')
@@ -73,9 +74,16 @@ export const useChatStore = defineStore('chat', () => {
     if (displayName) myDisplayName = displayName
     window.addEventListener('beforeunload', onBeforeUnload)
     if (partnerOnline.value) startLoginGrace()
+    const token = localStorage.getItem('token')
+    if (!token) {
+      console.warn('%c[WS] %c没有 token，跳过连接', 'color: #f59e0b; font-weight: bold;', 'color: #5C4A52;')
+      return
+    }
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
     const base = WS_BASE || `${proto}//${location.host}`
-    ws = new WebSocket(`${base}/ws/chat?username=${encodeURIComponent(username)}`)
+    // Backend now authenticates WS via SaToken; username in query is no
+    // longer trusted/accepted. Identity is resolved from token server-side.
+    ws = new WebSocket(`${base}/ws/chat?token=${encodeURIComponent(token)}`)
 
     ws.onopen = () => {
       console.log('%c[WS] %c已连接', 'color: #10b981; font-weight: bold;', 'color: #5C4A52;')
@@ -93,6 +101,16 @@ export const useChatStore = defineStore('chat', () => {
         'color: #5C4A52;',
         msg,
       )
+
+      // Backend error frame (unsupported command, invalid token before close,
+      // etc.). Don't append to chat list; expose it via lastEventType so the
+      // global handler can toast if needed.
+      if (msg.type === 'error') {
+        lastEventTime.value = Date.now()
+        lastEventType.value = 'error'
+        emitEvent(msg)
+        return
+      }
 
       // Heart signal: preferred future protocol is { type: 'heart' }.
       // Current backend treats outgoing WS text as chat, so we also accept
@@ -158,24 +176,29 @@ export const useChatStore = defineStore('chat', () => {
     ws.onclose = (ev) => {
       isConnected.value = false
       ws = null
-      // Backend's "kicked" close uses code 4001 (per API contract). Either
-      // we already saw the kicked frame and set the flag, or we receive the
-      // close before the frame is processed — both cases must avoid the
-      // reconnect loop and emit a single kicked event so the UI can act.
-      if (ev.code === 4001 || kickedFlag) {
+      // Backend's "kicked" close uses code 4001; invalid/expired WS token
+      // uses 4003. Either means don't reconnect — the user must log in
+      // again or accept the kicked-session redirect.
+      if (ev.code === 4001 || ev.code === 4003 || kickedFlag) {
         if (!kickedFlag) {
           kickedFlag = true
           lastEventTime.value = Date.now()
-          lastEventType.value = 'kicked'
+          lastEventType.value = ev.code === 4003 ? 'error' : 'kicked'
           emitEvent({
             sender: 'SYSTEM',
-            content: 'Logged in elsewhere',
+            content: ev.code === 4003 ? 'WebSocket token invalid' : 'Logged in elsewhere',
             time: '',
-            type: 'kicked',
+            type: ev.code === 4003 ? 'error' : 'kicked',
           })
         }
         shouldReconnect = false
-        console.log('%c[WS] %c账号在其他设备登录，已断开', 'color: #f43f5e; font-weight: bold;', 'color: #5C4A52;')
+        console.log(
+          ev.code === 4003
+            ? '%c[WS] %ctoken 无效，已断开'
+            : '%c[WS] %c账号在其他设备登录，已断开',
+          'color: #f43f5e; font-weight: bold;',
+          'color: #5C4A52;',
+        )
         return
       }
       console.log('%c[WS] %c断开连接，3秒后重连', 'color: #f59e0b; font-weight: bold;', 'color: #5C4A52;')
@@ -238,13 +261,19 @@ export const useChatStore = defineStore('chat', () => {
     try {
       if (reset) {
         historyCursor.value = null
+        historyCursorId.value = null
         historyHasMore.value = true
         historyLoaded.value = false
         messages.value = messages.value.filter(m => !m.data?.id) // keep optimistic live messages only
       }
-      const res = await getChatHistory({ cursor: historyCursor.value, size: HISTORY_PAGE_SIZE })
+      const res = await getChatHistory({
+        cursor: historyCursor.value,
+        cursorId: historyCursorId.value,
+        size: HISTORY_PAGE_SIZE,
+      })
       prependHistory(res.data.list)
       historyCursor.value = res.data.nextCursor
+      historyCursorId.value = res.data.nextCursorId ?? null
       historyHasMore.value = res.data.hasMore
       historyLoaded.value = true
     } catch (err: any) {

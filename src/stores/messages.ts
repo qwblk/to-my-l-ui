@@ -25,7 +25,9 @@ export const useMessagesStore = defineStore('messages', () => {
   const loadingReceived = ref(false)
   const loadingSent = ref(false)
   const receivedCursor = ref<string | null>(null)
+  const receivedCursorId = ref<number | null>(null)
   const sentCursor = ref<string | null>(null)
+  const sentCursorId = ref<number | null>(null)
   const receivedHasMore = ref(true)
   const sentHasMore = ref(true)
   /** Ids currently visually expanded. Independent from isRead. */
@@ -54,7 +56,9 @@ export const useMessagesStore = defineStore('messages', () => {
       receivedHasMore.value = false
       sentHasMore.value = false
       receivedCursor.value = null
+      receivedCursorId.value = null
       sentCursor.value = null
+      sentCursorId.value = null
     } catch {
       // silent
     } finally {
@@ -72,7 +76,9 @@ export const useMessagesStore = defineStore('messages', () => {
       received.value = r.data.list
       sent.value = s.data.list
       receivedCursor.value = r.data.nextCursor
+      receivedCursorId.value = r.data.nextCursorId ?? null
       sentCursor.value = s.data.nextCursor
+      sentCursorId.value = s.data.nextCursorId ?? null
       receivedHasMore.value = r.data.hasMore
       sentHasMore.value = s.data.hasMore
     } catch {
@@ -84,12 +90,14 @@ export const useMessagesStore = defineStore('messages', () => {
   async function resetReceived() {
     received.value = []
     receivedCursor.value = null
+    receivedCursorId.value = null
     receivedHasMore.value = true
     await loadMoreReceived()
   }
   async function resetSent() {
     sent.value = []
     sentCursor.value = null
+    sentCursorId.value = null
     sentHasMore.value = true
     await loadMoreSent()
   }
@@ -98,9 +106,10 @@ export const useMessagesStore = defineStore('messages', () => {
     if (loadingReceived.value || !receivedHasMore.value) return
     loadingReceived.value = true
     try {
-      const res = await getReceivedMessagesPage({ cursor: receivedCursor.value, size: PAGE_SIZE })
+      const res = await getReceivedMessagesPage({ cursor: receivedCursor.value, cursorId: receivedCursorId.value, size: PAGE_SIZE })
       dedupeAppend(received.value, res.data.list)
       receivedCursor.value = res.data.nextCursor
+      receivedCursorId.value = res.data.nextCursorId ?? null
       receivedHasMore.value = res.data.hasMore
     } finally {
       loadingReceived.value = false
@@ -111,9 +120,10 @@ export const useMessagesStore = defineStore('messages', () => {
     if (loadingSent.value || !sentHasMore.value) return
     loadingSent.value = true
     try {
-      const res = await getSentMessagesPage({ cursor: sentCursor.value, size: PAGE_SIZE })
+      const res = await getSentMessagesPage({ cursor: sentCursor.value, cursorId: sentCursorId.value, size: PAGE_SIZE })
       dedupeAppend(sent.value, res.data.list)
       sentCursor.value = res.data.nextCursor
+      sentCursorId.value = res.data.nextCursorId ?? null
       sentHasMore.value = res.data.hasMore
     } finally {
       loadingSent.value = false

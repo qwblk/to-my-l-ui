@@ -7,6 +7,6 @@ import type { ChatHistoryResponse, Result } from '@/types'
  * Backend returns DESC (newest first); the store normalizes to ASC for
  * display and prepends older pages when the user scrolls upward.
  */
-export function getChatHistory(params?: { cursor?: string | null; size?: number }) {
+export function getChatHistory(params?: { cursor?: string | null; cursorId?: number | null; size?: number }) {
   return client.get<unknown, Result<ChatHistoryResponse>>('/chat/history', { params })
 }

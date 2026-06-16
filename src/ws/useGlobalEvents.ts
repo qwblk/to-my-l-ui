@@ -83,6 +83,22 @@ export function useGlobalEvents() {
     // Skip own echoes
     if (msg.sender === auth.currentUser?.name) return
 
+    // === WS auth error / kicked ===
+    if (msg.type === 'error' && /token|login|invalid/i.test(msg.content || '')) {
+      ElNotification({
+        title: '登录已失效',
+        message: '请重新登录后继续使用聊天室',
+        type: 'warning',
+        duration: 5000,
+        position: 'top-right',
+      })
+      setTimeout(() => {
+        try { localStorage.removeItem('token') } catch { /* ignore */ }
+        window.location.replace('/login')
+      }, 600)
+      return
+    }
+
     // === Kicked: another device just signed in with the same account ===
     if (msg.type === 'kicked') {
       ElNotification({

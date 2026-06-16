@@ -147,6 +147,8 @@ export interface MessagePageResponse {
   list: Message[]
   /** Next cursor, yyyy-MM-dd HH:mm:ss. Null when no more. */
   nextCursor: string | null
+  /** Tie-break cursor id for rows sharing the same createTime second. */
+  nextCursorId?: number | null
   hasMore: boolean
 }
 
@@ -159,6 +161,7 @@ export type WsType =
   | 'offline'
   | 'status'
   | 'kicked'
+  | 'error'
   | 'diary'
   | 'diary_delete'
   | 'moment'
@@ -191,6 +194,8 @@ export interface ChatMessage {
 export interface ChatHistoryResponse {
   list: ChatMessage[]
   nextCursor: string | null
+  /** Tie-break cursor id for rows sharing the same createTime second. */
+  nextCursorId?: number | null
   hasMore: boolean
 }
 
