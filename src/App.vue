@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { useChatStore } from '@/stores/chat'
 import AppHeader from '@/components/AppHeader.vue'
 import MobileTabBar from '@/components/MobileTabBar.vue'
 import FloatingHearts from '@/components/FloatingHearts.vue'
@@ -12,6 +13,7 @@ import { useBreakpoint } from '@/composables/useBreakpoint'
 import { useRoute, useRouter } from 'vue-router'
 
 const auth = useAuthStore()
+const chat = useChatStore()
 const heartsRef = ref<InstanceType<typeof FloatingHearts> | null>(null)
 const catchup = useOfflineCatchup()
 const { isSmall } = useBreakpoint()
@@ -76,9 +78,12 @@ onMounted(async () => {
 // Single source of truth for triggering catch-up: any time currentUser
 // transitions from null/missing to a real user (refresh, fresh login,
 // or partner switch — though there's only ever the one user per session).
+// Also forwards the id to the chat store so presence frames can be
+// self-identified by stable user id rather than fragile name strings.
 watch(() => auth.currentUser?.id, (id, oldId) => {
+  chat.setMyUserId(id ?? null)
   if (id && id !== oldId) catchup.run()
-})
+}, { immediate: true })
 
 // Register the singleton hearts overlay so any view can trigger effects
 watch(heartsRef, (el) => {

@@ -7,16 +7,15 @@ import { getPartnerDisplayName } from '@/constants/user'
 import { getSettings } from '@/composables/useSettings'
 import { useRoute } from 'vue-router'
 
-/** During the first N ms after WS connect we treat presence transitions as
- *  "replay of existing state", not real flips — so login doesn't pop a
- *  toast about the partner already being online. */
-const LOGIN_GRACE_MS = 4000
-
 export function useGlobalEvents() {
   const auth = useAuthStore()
   const chat = useChatStore()
   const route = useRoute()
   let unsub: (() => void) | null = null
+  /** Tracks the last presence value we *toasted*. Suppresses duplicate
+   *  online/offline notifications when status snapshots and online frames
+   *  describe the same flip — the status branch (below) seeds this so a
+   *  refresh into "partner already online" doesn't toast. */
   let lastAnnouncedOnline = false
 
   onMounted(() => {
@@ -25,10 +24,6 @@ export function useGlobalEvents() {
   })
 
   onUnmounted(() => { unsub?.() })
-
-  function inLoginGrace(): boolean {
-    return chat.connectedAt > 0 && Date.now() - chat.connectedAt < LOGIN_GRACE_MS
-  }
 
   /** Are we currently watching the live chat? Then no toast for incoming chat. */
   function isOnChatPage(): boolean {
@@ -158,12 +153,18 @@ export function useGlobalEvents() {
       : '对方'
 
     // === Presence: online / offline ===
+    //
+    // Replay of "partner already online" on refresh is no longer a problem:
+    // the new backend protocol broadcasts `online` only to non-self
+    // sessions, so we never see our own login echo, and a partner who was
+    // already online is reported via the initial `status` snapshot — which
+    // the branch above silently seeds into lastAnnouncedOnline. By the
+    // time an `online` frame actually reaches us, it's a real new arrival.
+    //
+    // The lastAnnouncedOnline dedup below still guards against
+    // status-then-online ordering quirks ("we already showed them online,
+    // don't toast again").
     if (msg.type === 'online' || msg.type === 'offline') {
-      // Silent during the login grace — that "online" is replay, not new.
-      if (inLoginGrace()) {
-        lastAnnouncedOnline = chat.partnerOnline
-        return
-      }
       if (msg.type === 'online') {
         if (lastAnnouncedOnline) return
         lastAnnouncedOnline = true

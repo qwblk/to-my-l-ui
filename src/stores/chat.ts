@@ -15,10 +15,6 @@ export const useChatStore = defineStore('chat', () => {
   const lastEventTime = ref(0)
   const lastEventType = ref('')
   const isConnected = ref(false)
-  /** Timestamp (ms) of the most recent successful WS open. Consumers
-   *  use this to suppress "上线" toasts in the first few seconds after a
-   *  fresh login (where the existing online status is replayed, not new). */
-  const connectedAt = ref(0)
   const loadingHistory = ref(false)
   const historyCursor = ref<string | null>(null)
   const historyCursorId = ref<number | null>(null)
@@ -33,6 +29,10 @@ export const useChatStore = defineStore('chat', () => {
   let ws: WebSocket | null = null
   let myUsername = ''
   let myDisplayName = ''
+  /** Set by callers (auth store) so presence frames can be self-identified
+   *  by stable id rather than name. The string-based isSelf() is still kept
+   *  as a fallback for older backend frames that don't carry data.userId. */
+  let myUserId: number | null = null
   let shouldReconnect = true
   /** Set when the server tells us a new session has signed in with the
    *  same account. Both the kicked WS frame and the close(4001) path read
@@ -56,9 +56,32 @@ export const useChatStore = defineStore('chat', () => {
 
   function isSelf(sender: string): boolean {
     const s = (sender || '').toLowerCase()
-    if (s === myUsername.toLowerCase()) return true
+    // Empty/whitespace sender is "no one in particular" — treat as not-self
+    // so it doesn't accidentally match anyone, but the call sites that ask
+    // "is this *me*" should also defensively skip empty before deciding
+    // anything (e.g. status snapshots filter empty entries before this).
+    if (!s) return false
+    if (myUsername && s === myUsername.toLowerCase()) return true
     if (myDisplayName && s === myDisplayName.toLowerCase()) return true
     return false
+  }
+
+  /** Decide whether a presence-style frame's actor is *this* user.
+   *
+   *  Prefer the new `data.userId` channel (added by backend after the
+   *  presence-protocol upgrade — exactly one canonical id per actor, no
+   *  string ambiguity). Fall back to the historical name-based isSelf()
+   *  only when userId is absent, so we keep working against an older
+   *  server during the transition.
+   */
+  function isSelfFrame(msg: WsMessage): boolean {
+    const uid = (msg.data as { userId?: number } | undefined)?.userId
+    if (typeof uid === 'number') return uid === myUserId
+    return isSelf(msg.sender)
+  }
+
+  function setMyUserId(id: number | null) {
+    myUserId = id
   }
 
   function connect(username: string, displayName?: string) {
@@ -88,7 +111,6 @@ export const useChatStore = defineStore('chat', () => {
     ws.onopen = () => {
       console.log('%c[WS] %c已连接', 'color: #10b981; font-weight: bold;', 'color: #5C4A52;')
       isConnected.value = true
-      connectedAt.value = Date.now()
     }
 
     ws.onmessage = (e) => {
@@ -118,7 +140,7 @@ export const useChatStore = defineStore('chat', () => {
       // it to the chat message list; it just fires an event so ChatView can
       // burst hearts on the receiver's screen.
       if (msg.type === 'heart' || (msg.type === 'chat' && msg.content === HEART_MARKER)) {
-        if (!isSelf(msg.sender)) {
+        if (!isSelfFrame(msg)) {
           lastEventTime.value = Date.now()
           lastEventType.value = 'heart'
           emitEvent({ ...msg, type: 'heart', content: 'heart' })
@@ -154,14 +176,35 @@ export const useChatStore = defineStore('chat', () => {
       // already optimistically rendered the bubble in send(). Without this
       // guard, every user message would briefly double up the moment the
       // server bounces it back to its origin connection.
-      if (msg.type === 'chat' && isSelf(msg.sender)) return
+      if (msg.type === 'chat' && isSelfFrame(msg)) return
 
       // Track partner presence — used by AppHeader's status dot only.
-      if (msg.type === 'online' && !isSelf(msg.sender)) partnerOnline.value = true
-      if (msg.type === 'offline' && !isSelf(msg.sender)) partnerOnline.value = false
+      // Identity is resolved by id (new protocol) with a name-string fallback
+      // for any old-format frames still in flight during the rollout.
+      if (msg.type === 'online' && !isSelfFrame(msg)) partnerOnline.value = true
+      if (msg.type === 'offline' && !isSelfFrame(msg)) partnerOnline.value = false
       if (msg.type === 'status') {
-        const list: string[] | undefined = msg.data?.online as string[] | undefined
-        if (list) partnerOnline.value = list.some(u => u.toLowerCase() !== myUsername.toLowerCase())
+        // New format: data.online is an array of { userId, name }.
+        // Old format: data.online is an array of strings (display names),
+        //   sometimes with empty placeholders. Both are accepted while the
+        //   server rolls forward, but the moment any entry has a userId we
+        //   trust id-based identification exclusively for that snapshot.
+        const raw = msg.data?.online as Array<unknown> | undefined
+        if (Array.isArray(raw)) {
+          const partnerPresent = raw.some(entry => {
+            if (entry && typeof entry === 'object') {
+              const e = entry as { userId?: number; name?: string }
+              if (typeof e.userId === 'number') return e.userId !== myUserId
+              if (typeof e.name === 'string' && e.name.trim()) return !isSelf(e.name)
+              return false
+            }
+            if (typeof entry === 'string') {
+              return entry.trim().length > 0 && !isSelf(entry)
+            }
+            return false
+          })
+          partnerOnline.value = partnerPresent
+        }
       }
 
       messages.value.push(msg)
@@ -169,7 +212,7 @@ export const useChatStore = defineStore('chat', () => {
       lastEventType.value = msg.type
       // Bump unread for partner chats; useGlobalEvents resets it when
       // entering /chat, so any chat the user actually sees doesn't count.
-      if (msg.type === 'chat' && !isSelf(msg.sender)) chatUnread.value++
+      if (msg.type === 'chat' && !isSelfFrame(msg)) chatUnread.value++
       emitEvent(msg)
     }
 
@@ -225,7 +268,6 @@ export const useChatStore = defineStore('chat', () => {
     ws?.close()
     ws = null
     isConnected.value = false
-    connectedAt.value = 0
   }
 
   function prependHistory(list: ChatMessage[]) {
@@ -360,7 +402,6 @@ export const useChatStore = defineStore('chat', () => {
     lastEventTime,
     lastEventType,
     isConnected,
-    connectedAt,
     loadingHistory,
     historyHasMore,
     historyLoaded,
@@ -372,6 +413,7 @@ export const useChatStore = defineStore('chat', () => {
     send,
     sendHeart,
     markChatRead,
+    setMyUserId,
     onEvent,
   }
 })
