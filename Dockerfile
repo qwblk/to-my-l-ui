@@ -68,6 +68,6 @@ EXPOSE 80 443
 # reporting healthy. Requires backend to expose /api/health (200 OK,
 # no DB hit — just a liveness signal).
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-    CMD wget -qO- http://127.0.0.1/api/health >/dev/null || exit 1
+    CMD wget -qO- http://127.0.0.1/__health >/dev/null || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]
