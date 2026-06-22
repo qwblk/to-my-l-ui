@@ -50,7 +50,7 @@ const router = createRouter({
     },
 
     { path: '/chat', name: 'Chat', component: () => import('@/views/ChatView.vue'), meta: { requiresAuth: true } },
-    { path: '/analytics', name: 'Analytics', component: () => import('@/views/AnalyticsView.vue'), meta: { requiresAuth: true, coverNav: true, standalone: true } },
+    { path: '/analytics', name: 'Analytics', component: () => import('@/views/AnalyticsView.vue'), meta: { coverNav: true, standalone: true } },
     { path: '/mine', name: 'Mine', component: () => import('@/views/MineView.vue'), meta: { requiresAuth: true } },
     { path: '/mine/settings', name: 'Settings', component: () => import('@/views/SettingsView.vue'), meta: { requiresAuth: true, coverNav: true } },
   ],

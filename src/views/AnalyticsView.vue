@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useAuthStore } from '@/stores/auth'
 import {
   getAnalyticsRecent,
   getAnalyticsSummary,
@@ -9,13 +8,11 @@ import {
   type AnalyticsSummary,
 } from '@/api/analytics'
 
-const auth = useAuthStore()
 const loading = ref(false)
 const days = ref(14)
 const summary = ref<AnalyticsSummary | null>(null)
 const recent = ref<AnalyticsRecentEvent[]>([])
 const error = ref('')
-const canView = computed(() => auth.currentUser?.id === 1)
 const personFilter = ref<'all' | 'me' | 'partner' | 'anonymous'>('all')
 
 const eventLabels: Record<AnalyticsEventType, string> = {
@@ -42,10 +39,6 @@ const funnelOrder: AnalyticsEventType[] = [
 const maxDaily = computed(() => Math.max(1, ...(summary.value?.daily.map(d => d.sessionStart + d.authSeen + d.loginSuccess + d.pageView + d.ritualOpen) || [1])))
 
 async function load() {
-  if (!canView.value) {
-    error.value = '这里暂时只给你自己看。'
-    return
-  }
   loading.value = true
   error.value = ''
   try {
@@ -77,10 +70,7 @@ function personOf(userId: number | null) {
   return '未登录'
 }
 
-onMounted(async () => {
-  if (!auth.currentUser && auth.isLoggedIn) await auth.fetchCurrentUser()
-  await load()
-})
+onMounted(load)
 </script>
 
 <template>
