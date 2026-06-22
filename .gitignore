@@ -44,3 +44,9 @@ screenshots/
 *.key
 *.crt
 secrets/
+
+# Private ritual media — deploy manually, don't commit personal files
+public/ritual/*.mp4
+public/ritual/*.jpg
+public/ritual/*.jpeg
+public/ritual/*.png

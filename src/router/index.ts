@@ -4,6 +4,7 @@ import { useAuthStore } from '@/stores/auth'
 const router = createRouter({
   history: createWebHistory(),
   routes: [
+    { path: '/for-xue', name: 'RitualEntry', component: () => import('@/views/RitualEntryView.vue'), meta: { coverNav: true, standalone: true } },
     { path: '/login', name: 'Login', component: () => import('@/views/LoginView.vue'), meta: { guest: true } },
     { path: '/', name: 'Home', component: () => import('@/views/HomeView.vue'), meta: { requiresAuth: true } },
     { path: '/diary', name: 'Diary', component: () => import('@/views/DiaryView.vue'), meta: { requiresAuth: true } },
@@ -49,6 +50,7 @@ const router = createRouter({
     },
 
     { path: '/chat', name: 'Chat', component: () => import('@/views/ChatView.vue'), meta: { requiresAuth: true } },
+    { path: '/analytics', name: 'Analytics', component: () => import('@/views/AnalyticsView.vue'), meta: { requiresAuth: true, coverNav: true, standalone: true } },
     { path: '/mine', name: 'Mine', component: () => import('@/views/MineView.vue'), meta: { requiresAuth: true } },
     { path: '/mine/settings', name: 'Settings', component: () => import('@/views/SettingsView.vue'), meta: { requiresAuth: true, coverNav: true } },
   ],

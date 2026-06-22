@@ -10,6 +10,7 @@ import { useGlobalEvents } from '@/ws/useGlobalEvents'
 import { registerHearts } from '@/composables/useHeartBurst'
 import { useOfflineCatchup } from '@/composables/useOfflineCatchup'
 import { useBreakpoint } from '@/composables/useBreakpoint'
+import { track, trackSessionStartOnce } from '@/composables/useAnalytics'
 import { useRoute, useRouter } from 'vue-router'
 
 const auth = useAuthStore()
@@ -20,7 +21,7 @@ const { isSmall } = useBreakpoint()
 const router = useRouter()
 const route = useRoute()
 const coverNav = computed(() => !!route.meta.coverNav)
-const hideChrome = computed(() => coverNav.value && isSmall.value)
+const hideChrome = computed(() => coverNav.value && (isSmall.value || !!route.meta.standalone))
 
 /**
  * Per-route slide direction for the phone navigation.
@@ -42,6 +43,8 @@ function depthOf(path: string): number {
 }
 const slideName = ref<'slide-left' | 'slide-right' | 'slide-soft'>('slide-soft')
 router.afterEach((to, from) => {
+  if (from.name && to.path !== from.path) track('page_view', { name: String(to.name || '') }, to.path)
+
   const d1 = depthOf(from.path)
   const d2 = depthOf(to.path)
   // On phones we keep a strong directional slide for navigation depth.
@@ -66,6 +69,9 @@ router.afterEach((to, from) => {
 })
 
 onMounted(async () => {
+  trackSessionStartOnce()
+  track('page_view', { name: String(route.name || ''), initial: true }, route.path)
+
   if (auth.isLoggedIn) {
     // fetchCurrentUser populates auth.currentUser, which fires the
     // `watch(() => auth.currentUser?.id)` below — that's the single
@@ -82,6 +88,10 @@ onMounted(async () => {
 // self-identified by stable user id rather than fragile name strings.
 watch(() => auth.currentUser?.id, (id, oldId) => {
   chat.setMyUserId(id ?? null)
+  // Record every confirmed return with a valid token. This intentionally
+  // does NOT use sessionStorage de-dupe: if she opens the site tomorrow
+  // while still logged in, we still want to know she came back.
+  if (id && id !== oldId) track('auth_seen', { userId: id })
   if (id && id !== oldId) catchup.run()
 }, { immediate: true })
 

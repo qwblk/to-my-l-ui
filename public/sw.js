@@ -56,6 +56,7 @@ self.addEventListener('fetch', (event) => {
     url.pathname.startsWith('/moment') ||
     url.pathname.startsWith('/message') ||
     url.pathname.startsWith('/upload') ||
+    url.pathname.startsWith('/analytics') ||
     url.pathname.startsWith('/ws')
   ) {
     return // let the browser do its thing

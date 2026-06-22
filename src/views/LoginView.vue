@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
 import client from '@/api/client'
@@ -9,6 +9,7 @@ import type { Result, LoginResponse, User } from '@/types'
 import { ElMessage } from 'element-plus'
 import { SINCE_DATE } from '@/constants/user'
 import { useHeartBurst } from '@/composables/useHeartBurst'
+import { track } from '@/composables/useAnalytics'
 import {
   DEFAULT_FIRST_WELCOME,
   FIRST_WELCOME_BY_USERNAME,
@@ -27,6 +28,7 @@ const matches = import.meta.glob('@/assets/login-illustration.{png,jpg,jpeg,webp
 const loginIllustration: string = Object.values(matches)[0] || '/icons/heart.svg'
 
 const router = useRouter()
+const route = useRoute()
 const auth = useAuthStore()
 const chat = useChatStore()
 const hearts = useHeartBurst()
@@ -35,7 +37,8 @@ const formRef = ref()
 const loading = ref(false)
 const serverError = ref('')
 
-const form = reactive({ username: '', password: '' })
+const presetUsername = typeof route.query.u === 'string' ? route.query.u : ''
+const form = reactive({ username: presetUsername, password: '' })
 const rules = {
   username: [{ required: true, message: '请输入账号', trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
@@ -78,6 +81,7 @@ async function handleLogin() {
     try { sessionStorage.removeItem('tml-home-intro-played') } catch { /* ignore */ }
 
     await auth.fetchCurrentUser()
+    track('login_success', { firstLogin: res.data.firstLogin, userId: auth.currentUser?.id })
 
     if (res.data.firstLogin) {
       const username = form.username.trim().toLowerCase()
