@@ -51,6 +51,10 @@ services:
       #   ./certs/privkey.pem
       # The container reads them from /etc/nginx/certs/*.pem.
       - '${SSL_CERT_DIR:-./certs}:/etc/nginx/certs:ro'
+      # Private ritual media. Kept out of git and mounted at runtime so
+      # large/private files (song.mp4, hand.jpg, etc.) don't bloat the
+      # Docker image and can be replaced without rebuilding.
+      - './public/ritual:/usr/share/nginx/html/ritual:ro'
     restart: unless-stopped
     networks:
       - to-my-l
