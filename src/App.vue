@@ -22,6 +22,7 @@ const router = useRouter()
 const route = useRoute()
 const coverNav = computed(() => !!route.meta.coverNav)
 const hideChrome = computed(() => coverNav.value && (isSmall.value || !!route.meta.standalone))
+const shouldUseAuthedSession = computed(() => !!route.meta.requiresAuth)
 
 /**
  * Per-route slide direction for the phone navigation.
@@ -72,7 +73,7 @@ onMounted(async () => {
   trackSessionStartOnce()
   track('page_view', { name: String(route.name || ''), initial: true }, route.path)
 
-  if (auth.isLoggedIn) {
+  if (auth.isLoggedIn && shouldUseAuthedSession.value) {
     // fetchCurrentUser populates auth.currentUser, which fires the
     // `watch(() => auth.currentUser?.id)` below — that's the single
     // entry point for catchup.run(). Don't call it manually here, or
@@ -91,8 +92,8 @@ watch(() => auth.currentUser?.id, (id, oldId) => {
   // Record every confirmed return with a valid token. This intentionally
   // does NOT use sessionStorage de-dupe: if she opens the site tomorrow
   // while still logged in, we still want to know she came back.
-  if (id && id !== oldId) track('auth_seen', { userId: id })
-  if (id && id !== oldId) catchup.run()
+  if (id && id !== oldId && shouldUseAuthedSession.value) track('auth_seen', { userId: id })
+  if (id && id !== oldId && shouldUseAuthedSession.value) catchup.run()
 }, { immediate: true })
 
 // Register the singleton hearts overlay so any view can trigger effects
@@ -111,7 +112,7 @@ let heartbeatTimer: number | null = null
 function startHeartbeat() {
   stopHeartbeat()
   heartbeatTimer = window.setInterval(() => {
-    if (document.visibilityState === 'visible' && auth.isLoggedIn) {
+    if (document.visibilityState === 'visible' && auth.isLoggedIn && shouldUseAuthedSession.value) {
       catchup.markSeen()
     }
   }, 30_000)
@@ -133,7 +134,7 @@ onMounted(startHeartbeat)
 const REFOCUS_THRESHOLD_MS = 60_000
 let lastHidAt = 0
 document.addEventListener('visibilitychange', () => {
-  if (!auth.isLoggedIn) return
+  if (!auth.isLoggedIn || !shouldUseAuthedSession.value) return
   if (document.visibilityState === 'hidden') {
     lastHidAt = Date.now()
     return

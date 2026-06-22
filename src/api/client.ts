@@ -163,7 +163,11 @@ client.interceptors.response.use(
 
     if (code === 4012) {
       kickToLogin('账号已在其他设备登录，请重新登录', true)
-    } else if (status === 401 || status === 403 || looksLikeAuthFailure(code, msg)) {
+    } else if (status === 401 || looksLikeAuthFailure(code, msg)) {
+      // 403 is usually a real permission failure (e.g. /analytics is only
+      // visible to userId=1), not an expired login. Don't clear a valid
+      // token or bounce the user to /login just because they lack access
+      // to one protected admin-style page.
       kickToLogin('登录已过期，请重新登录')
     }
     return Promise.reject(data || err)
