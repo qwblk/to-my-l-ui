@@ -155,7 +155,7 @@ useGlobalEvents()
 <template>
   <FloatingHearts ref="heartsRef" />
   <FirstWelcomeModal />
-  <AppHeader v-if="auth.isLoggedIn && !hideChrome" />
+  <AppHeader v-if="auth.isLoggedIn && shouldUseAuthedSession && !hideChrome" />
   <div class="route-frame" :class="{ covered: hideChrome }">
     <router-view v-slot="{ Component }">
       <Transition :name="slideName" mode="out-in">
@@ -163,7 +163,7 @@ useGlobalEvents()
       </Transition>
     </router-view>
   </div>
-  <MobileTabBar v-if="auth.isLoggedIn && isSmall && !hideChrome" />
+  <MobileTabBar v-if="auth.isLoggedIn && shouldUseAuthedSession && isSmall && !hideChrome" />
 </template>
 
 <style>
