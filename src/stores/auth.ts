@@ -9,6 +9,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isLoggedIn = computed(() => !!token.value)
   const partnerId = computed(() => (currentUser.value?.id === 1 ? 2 : 1))
+  let fetchingMe: Promise<boolean> | null = null
 
   function setToken(t: string) {
     token.value = t
@@ -18,20 +19,34 @@ export const useAuthStore = defineStore('auth', () => {
   function clearToken() {
     token.value = null
     localStorage.removeItem('token')
+    // Backend also sets an Authorization cookie on login. If we only clear
+    // localStorage, the browser may keep sending the old cookie and the
+    // server can still identify the previous account after a logout/switch.
+    // Expire both common path variants defensively.
+    document.cookie = 'Authorization=; Max-Age=0; Path=/'
+    document.cookie = 'Authorization=; Max-Age=0; Path=/; SameSite=Lax'
   }
 
-  async function fetchCurrentUser() {
+  async function fetchCurrentUser(): Promise<boolean> {
     try {
       const res = await getMe()
       currentUser.value = res.data
+      return true
     } catch {
       // /user/me failing means the local token is no longer trustworthy.
-      // We don't navigate here ourselves — the axios interceptor in
-      // client.ts already shows the "登录已过期" prompt and the user
-      // confirms when to leave. Just clear local state so other watchers
-      // don't keep firing on a half-dead session.
       currentUser.value = null
+      clearToken()
+      return false
     }
+  }
+
+  async function ensureCurrentUser(): Promise<boolean> {
+    if (currentUser.value) return true
+    if (!token.value) return false
+    if (!fetchingMe) {
+      fetchingMe = fetchCurrentUser().finally(() => { fetchingMe = null })
+    }
+    return fetchingMe
   }
 
   function logout() {
@@ -47,6 +62,7 @@ export const useAuthStore = defineStore('auth', () => {
     setToken,
     clearToken,
     fetchCurrentUser,
+    ensureCurrentUser,
     logout,
   }
 })

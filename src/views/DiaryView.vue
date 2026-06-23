@@ -187,6 +187,29 @@ function sortEntryAsc(a: Diary, b: Diary) {
   return a.id - b.id
 }
 
+function dayKeyOf(entry: Diary): string {
+  return entry.createTime.slice(0, 10)
+}
+
+function weekdayOf(dateKey: string): string {
+  return ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'][new Date(dateKey + 'T00:00:00').getDay()]
+}
+
+function mergeCreatedDiary(entry: Diary) {
+  const date = dayKeyOf(entry)
+  const idx = dayGroups.value.findIndex(g => g.date === date)
+  if (idx >= 0) {
+    const group = dayGroups.value[idx]
+    if (!group.entries.some(e => e.id === entry.id)) {
+      group.entries.push(entry)
+      group.entries.sort(sortEntryAsc)
+    }
+  } else {
+    dayGroups.value.unshift({ date, weekday: weekdayOf(date), entries: [entry] })
+    dayGroups.value.sort((a, b) => b.date.localeCompare(a.date))
+  }
+}
+
 function onTabChange() { resetAndLoad() }
 
 function setupInfiniteObserver() {
@@ -217,11 +240,23 @@ async function handleCreate() {
     isPrivate: createForm.value.isPrivate ? 1 : 0,
   }
   try {
-    await createDiary(data)
+    const res = await createDiary(data)
     ElMessage.success('已经记下来了')
     showCreate.value = false
     createForm.value = blankForm()
-    await resetAndLoad()
+
+    // Prefer the created row returned by POST /diary for an immediate local
+    // insert. If an older/backend variant returns null or an incomplete row,
+    // fall back to the normal reload — the save itself still succeeded, so
+    // don't turn a local merge issue into a false "保存失败" toast.
+    if (res.data && typeof res.data.id === 'number' && res.data.createTime) {
+      mergeCreatedDiary(res.data)
+      selectedDate.value = dayKeyOf(res.data)
+      await nextTick()
+      document.getElementById('day-' + selectedDate.value)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    } else {
+      await resetAndLoad()
+    }
   } catch {
     ElMessage.error('保存失败')
   }

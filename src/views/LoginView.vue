@@ -68,6 +68,10 @@ async function handleLogin() {
   serverError.value = ''
 
   try {
+    // Switching accounts in the same browser must not carry the previous
+    // SaToken cookie into the login request. Clear both local and cookie
+    // state before asking the backend for a fresh token.
+    auth.clearToken()
     const res = await client.post<unknown, Result<LoginResponse>>('/user/login', {
       username: form.username.trim(),
       password: form.password,

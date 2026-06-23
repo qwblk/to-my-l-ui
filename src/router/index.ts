@@ -56,11 +56,13 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach((to, _from, next) => {
+router.beforeEach(async (to) => {
   const auth = useAuthStore()
-  if (to.meta.requiresAuth && !auth.isLoggedIn) next('/login')
-  else if (to.meta.guest && auth.isLoggedIn) next('/')
-  else next()
+  if (!to.meta.requiresAuth) return true
+
+  const ok = await auth.ensureCurrentUser()
+  if (!ok) return '/login'
+  return true
 })
 
 export default router
